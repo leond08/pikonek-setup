@@ -1853,6 +1853,13 @@ finalExports() {
     echo -e "- start: ${pikonek_RANGE_2}"
     echo -e "- lease_time: infinite"
     echo -e "- subnet: ${subnet}"
+    echo -e "dhcp_option:"
+    echo -e "- interface: ${PIKONEK_LAN_INTERFACE}"
+    echo -e "  ipaddress: ${LAN_IPV4_ADDRESS}"
+    echo -e "  option: 3"
+    echo -e "hosts:"
+    echo -e "- ip: ${PIKONEK_LAN_INTERFACE}"
+    echo -e "  name: portal.pikonek"
     } >> "${PIKONEK_LOCAL_REPO}/config/pikonek_dhcp_mapping.yaml"
     # echo the information to the user
     {
