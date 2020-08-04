@@ -40,17 +40,13 @@ setupVars=/etc/pikonek/setupVars.conf
 # PiKonek uses lighttpd as a Web server, and this is the config file for it
 # shellcheck disable=SC2034
 webroot="/var/www/html"
-webInterfaceGitUrl="https://github.com/leond08/pisokonek-route-ui-react.git"
-pikonekGitUrl="https://github.com/leond08/pisokonek-router-api.git"
+pikonekGitUrl="https://github.com/leond08/pikonek.git"
 pikonekGitConfig="https://github.com/leond08/configs.git"
 pikonekGitScripts="https://github.com/leond08/scripts.git"
 pikonekGitPackages="https://github.com/leond08/packages.git"
 PIKONEK_LOCAL_REPO="/etc/.pikonek"
-# These are the names of PiKoneks files, stored in an array
-PIKONEK_FILES=(chronometer list pikonekDebug pikonekLogFlush setupLCD update version gravity uninstall webpage)
 # This directory is where the PiKonek scripts will be installed
 PIKONEK_INSTALL_DIR="/etc/pikonek"
-PIKONEK_CONFIG_DIR="/etc/pikonek"
 PIKONEK_BIN_DIR="/usr/local/bin"
 useUpdateVars=false
 
@@ -63,6 +59,10 @@ IPV6_ADDRESS=${IPV6_ADDRESS}
 QUERY_LOGGING=true
 INSTALL_WEB_INTERFACE=true
 PRIVACY_LEVEL=0
+LIGHTTPD_USER="www-data"
+LIGHTTPD_GROUP="www-data"
+# and config file
+LIGHTTPD_CFG="lighttpd.conf"
 
 if [ -z "${USER}" ]; then
   USER="$(id -un)"
@@ -99,9 +99,6 @@ INSTALL_WEB_SERVER=true
 for var in "$@"; do
     case "$var" in
         "--reconfigure" ) reconfigure=true;;
-        "--i_do_not_follow_recommendations" ) skipSpaceCheck=true;;
-        "--unattended" ) runUnattended=true;;
-        "--disable-install-webserver" ) INSTALL_WEB_SERVER=false;;
     esac
 done
 
@@ -117,30 +114,29 @@ DONE="${COL_LIGHT_GREEN} done!${COL_NC}"
 OVER="\\r\\033[K"
 
 # A simple function that just echoes out our logo in ASCII format
-# This lets users know that it is a PiKonek, LLC product
 show_ascii_berry() {
-  echo -e "
-        ${COL_LIGHT_GREEN}.;;,.
-        .ccccc:,.
-         :cccclll:.      ..,,
-          :ccccclll.   ;ooodc
-           'ccll:;ll .oooodc
-             .;cll.;;looo:.
-                 ${COL_LIGHT_RED}.. ','.
-                .',,,,,,'.
-              .',,,,,,,,,,.
-            .',,,,,,,,,,,,....
-          ....''',,,,,,,'.......
-        .........  ....  .........
-        ..........      ..........
-        ..........      ..........
-        .........  ....  .........
-          ........,,,,,,,'......
-            ....',,,,,,,,,,,,.
-               .',,,,,,,,,'.
-                .',,,,,,'.
-                  ..'''.${COL_NC}
-"
+    echo -e "
+    ${COL_LIGHT_RED}         ____  _ _  __                _    
+            |  _ \(_) |/ /___  _ __   ___| | __
+            | |_) | | ' // _ \| '_ \ / _ \ |/ /
+            |  __/| | . \ (_) | | | |  __/   < 
+            |_|   |_|_|\_\___/|_| |_|\___|_|\_\.${COL_NC}
+    "
+}
+
+uninstall() {
+    # Remove existing files
+    rm -rf "${PIKONEK_INSTALL_DIR}/configs"
+    rm -rf "${PIKONEK_INSTALL_DIR}/scripts"
+    rm -rf "${PIKONEK_INSTALL_DIR}/pikonek"
+    rm -rf "${PIKONEK_INSTALL_DIR}/packages"
+    rm -rf "${PIKONEK_INSTALL_DIR}/setupVars.conf"
+    rm -rf "${PIKONEK_INSTALL_DIR}/setupVars.conf.update.bak"
+    rm -rf "${PIKONEK_INSTALL_DIR}/install.log"
+    rm -rf /etc/dnsmasq.d/01-pikonek.conf
+    rm -rf /etc/init.d/S70piknkmain
+    rm -rf /etc/sudoers.d/pikonek
+    rm -rf /etc/cron.d/pikonek
 }
 
 is_command() {
@@ -156,7 +152,6 @@ os_check() {
     # This function gets a list of supported OS versions from a TXT record at versions.PiKonek.net
     # and determines whether or not the script is running on one of those systems
     local remote_os_domain valid_os valid_version detected_os_pretty detected_os detected_version display_warning
-    remote_os_domain="versions.PiKonek.net" #"Raspbian=9,10 Ubuntu=16,18,20 Debian=9,10"
     remote_os_domain="Raspbian=9,10 Ubuntu=16,18,20 Debian=9,10"
     valid_os=false
     valid_version=false
@@ -264,12 +259,12 @@ if is_command apt-get ; then
     if apt-cache show "${python3Ver}-pip" > /dev/null 2>&1; then
         pythonpip3="python3-pip"
     else
-        printf "  %b Aborting installation: No SQLite PHP module was found in APT repository.\\n" "${CROSS}"
+        printf "  %b Aborting installation: No python3-pip module was found in APT repository.\\n" "${CROSS}"
         exit 1
     fi
     # Since our install script is so large, we need several other programs to successfully get a machine provisioned
     # These programs are stored in an array so they can be looped through later
-    INSTALLER_DEPS=(lighttpd python3 sqlite3 dnsmasq python3-pip gawk curl cron wget iptables whiptail git)
+    INSTALLER_DEPS=(ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip gawk curl cron wget iptables whiptail git openssl)
     # The Web server user,
     LIGHTTPD_USER="www-data"
     # group,
@@ -379,10 +374,10 @@ update_repo() {
     git pull --quiet &> /dev/null || return $?
     # Check current branch. If it is master, then reset to the latest available tag.
     # In case extra commits have been added after tagging/release (i.e in case of metadata updates/README.MD tweaks)
-    curBranch=$(git rev-parse --abbrev-ref HEAD)
-    if [[ "${curBranch}" == "master" ]]; then
-         git reset --hard "$(git describe --abbrev=0 --tags)" || return $?
-    fi
+    # curBranch=$(git rev-parse --abbrev-ref HEAD)
+    # if [[ "${curBranch}" == "master" ]]; then
+    #      git reset --hard "$(git describe --abbrev=0 --tags)" || return $?
+    # fi
     # Show a completion message
     printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
     # Data in the repositories is public anyway so we can make it readable by everyone (+r to keep executable permission if already set by git)
@@ -408,7 +403,7 @@ getGitFiles() {
         # Show that we're checking it
         printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
         # Update the repo, returning an error message on failure
-        # update_repo "${directory}" || { printf "\\n  %b: Could not update local repository. Contact support.%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
+        update_repo "${directory}" || { printf "\\n  %b: Could not update local repository. Contact support.%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
     # If it's not a .git repo,
     else
         # Show an error
@@ -649,176 +644,6 @@ setupLanInterface() {
     getStaticIPv4LanSettings
 }
 
-# A function that let's the user pick an interface to use with PiKonek
-chooseInterface() {
-    # Turn the available interfaces into an array so it can be used with a whiptail dialog
-    local interfacesArray=()
-    # Number of available interfaces
-    local interfaceCount
-    # Whiptail variable storage
-    local chooseInterfaceCmd
-    # Temporary Whiptail options storage
-    local chooseInterfaceOptions
-    # Loop sentinel variable
-    local firstLoop=1
-
-    # Find out how many interfaces are available to choose from
-    interfaceCount=$(wc -l <<< "${availableInterfaces}")
-
-    # If there is one interface,
-    if [[ "${interfaceCount}" -eq 1 ]]; then
-        # Set it as the interface to use since there is no other option
-        pikonek_INTERFACE="${availableInterfaces}"
-        printf "  %b Using wan interface: %s\\n" "${INFO}" "${pikonek_INTERFACE}"
-    # Otherwise,
-    else
-        # While reading through the available interfaces
-        while read -r line; do
-            # use a variable to set the option as OFF to begin with
-            mode="OFF"
-            # If it's the first loop,
-            if [[ "${firstLoop}" -eq 1 ]]; then
-                # set this as the interface to use (ON)
-                firstLoop=0
-                mode="ON"
-            fi
-            # Put all these interfaces into an array
-            interfacesArray+=("${line}" "available" "${mode}")
-        # Feed the available interfaces into this while loop
-        done <<< "${availableInterfaces}"
-        # The whiptail command that will be run, stored in a variable
-        chooseInterfaceCmd=(whiptail --separate-output --radiolist "Choose the WAN Interface (press space to toggle selection)" "${r}" "${c}" "${interfaceCount}")
-        # Now run the command using the interfaces saved into the array
-        chooseInterfaceOptions=$("${chooseInterfaceCmd[@]}" "${interfacesArray[@]}" 2>&1 >/dev/tty) || \
-        # If the user chooses Cancel, exit
-        { printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
-        # For each interface
-        for desiredInterface in ${chooseInterfaceOptions}; do
-            # Set the one the user selected as the interface to use
-            pikonek_INTERFACE=${desiredInterface}
-            # and show this information to the user
-            printf "  %b Using wan interface: %s\\n" "${INFO}" "${pikonek_INTERFACE}"
-        done
-    fi
-}
-
-# This lets us prefer ULA addresses over GUA
-# This caused problems for some users when their ISP changed their IPv6 addresses
-# See https://github.com/PiKonek/PiKonek/issues/1473#issuecomment-301745953
-testIPv6() {
-    # first will contain fda2 (ULA)
-    printf -v first "%s" "${1%%:*}"
-    # value1 will contain 253 which is the decimal value corresponding to 0xfd
-    value1=$(( (0x$first)/256 ))
-    # will contain 162 which is the decimal value corresponding to 0xa2
-    value2=$(( (0x$first)%256 ))
-    # the ULA test is testing for fc00::/7 according to RFC 4193
-    if (( (value1&254)==252 )); then
-        # echoing result to calling function as return value
-        echo "ULA"
-    fi
-    # the GUA test is testing for 2000::/3 according to RFC 4291
-    if (( (value1&112)==32 )); then
-        # echoing result to calling function as return value
-        echo "GUA"
-    fi
-    # the LL test is testing for fe80::/10 according to RFC 4193
-    if (( (value1)==254 )) && (( (value2&192)==128 )); then
-        # echoing result to calling function as return value
-        echo "Link-local"
-    fi
-}
-
-# A dialog for showing the user about IPv6 blocking
-useIPv6dialog() {
-    # Determine the IPv6 address used for blocking
-    IPV6_ADDRESSES=($(ip -6 address | grep 'scope global' | awk '{print $2}'))
-
-    # For each address in the array above, determine the type of IPv6 address it is
-    for i in "${IPV6_ADDRESSES[@]}"; do
-        # Check if it's ULA, GUA, or LL by using the function created earlier
-        result=$(testIPv6 "$i")
-        # If it's a ULA address, use it and store it as a global variable
-        [[ "${result}" == "ULA" ]] && ULA_ADDRESS="${i%/*}"
-        # If it's a GUA address, we can still use it si store it as a global variable
-        [[ "${result}" == "GUA" ]] && GUA_ADDRESS="${i%/*}"
-    done
-
-    # Determine which address to be used: Prefer ULA over GUA or don't use any if none found
-    # If the ULA_ADDRESS contains a value,
-    if [[ ! -z "${ULA_ADDRESS}" ]]; then
-        # set the IPv6 address to the ULA address
-        IPV6_ADDRESS="${ULA_ADDRESS}"
-        # Show this info to the user
-        printf "  %b Found IPv6 ULA address, using it for blocking IPv6 ads\\n" "${INFO}"
-    # Otherwise, if the GUA_ADDRESS has a value,
-    elif [[ ! -z "${GUA_ADDRESS}" ]]; then
-        # Let the user know
-        printf "  %b Found IPv6 GUA address, using it for blocking IPv6 ads\\n" "${INFO}"
-        # And assign it to the global variable
-        IPV6_ADDRESS="${GUA_ADDRESS}"
-    # If none of those work,
-    else
-        # explain that IPv6 blocking will not be used
-        printf "  %b Unable to find IPv6 ULA/GUA address, IPv6 adblocking will not be enabled\\n" "${INFO}"
-        # So set the variable to be empty
-        IPV6_ADDRESS=""
-    fi
-
-    # If the IPV6_ADDRESS contains a value
-    if [[ ! -z "${IPV6_ADDRESS}" ]]; then
-        # Display that IPv6 is supported and will be used
-        whiptail --msgbox --backtitle "IPv6..." --title "IPv6 Supported" "$IPV6_ADDRESS will be used to block ads." "${r}" "${c}"
-    fi
-}
-
-# A function to check if we should use IPv4 and/or IPv6 for blocking ads
-use4andor6() {
-    # Named local variables
-    local useIPv4
-    local useIPv6
-    # Let user choose IPv4 and/or IPv6 via a checklist
-    cmd=(whiptail --separate-output --checklist "Select Protocols (press space to toggle selection)" "${r}" "${c}" 2)
-    # In an array, show the options available:
-    # IPv4 (on by default)
-    options=(IPv4 "Block ads over IPv4" on
-    # or IPv6 (on by default if available)
-    IPv6 "Block ads over IPv6" on)
-    # In a variable, show the choices available; exit if Cancel is selected
-    choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty) || { printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
-    # For each choice available,
-    for choice in ${choices}
-    do
-        # Set the values to true
-        case ${choice} in
-        IPv4  )   useIPv4=true;;
-        IPv6  )   useIPv6=true;;
-        esac
-    done
-    # If IPv4 is to be used,
-    if [[ "${useIPv4}" ]]; then
-        # Run our function to get the information we need
-        find_IPv4_information
-        getStaticIPv4Settings
-        setStaticIPv4
-    fi
-    # If IPv6 is to be used,
-    if [[ "${useIPv6}" ]]; then
-        # Run our function to get this information
-        useIPv6dialog
-    fi
-    # Echo the information to the user
-    printf "  %b IPv4 address: %s\\n" "${INFO}" "${IPV4_ADDRESS}"
-    printf "  %b IPv6 address: %s\\n" "${INFO}" "${IPV6_ADDRESS}"
-    # If neither protocol is selected,
-    if [[ ! "${useIPv4}" ]] && [[ ! "${useIPv6}" ]]; then
-        # Show an error in red
-        printf "  %bError: Neither IPv4 or IPv6 selected%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"
-        # and exit with an error
-        exit 1
-    fi
-}
-
 getStaticIPv4WanSettings() {
     # Local, named variables
     local ipSettingsCorrect
@@ -1001,110 +826,6 @@ It is also possible to use a DHCP reservation, but if you are going to do that, 
     fi
 }
 
-# configure networking via dhcpcd
-setDHCPCD() {
-    # check if the IP is already in the file
-    if grep -q "${IPV4_ADDRESS}" /etc/dhcpcd.conf; then
-        printf "  %b Static IP already configured\\n" "${INFO}"
-    # If it's not,
-    else
-        # we can append these lines to dhcpcd.conf to enable a static IP
-        echo "interface ${pikonek_INTERFACE}
-        static ip_address=${IPV4_ADDRESS}
-        static routers=${IPv4gw}
-        static domain_name_servers=${pikonek_DNS_1} ${pikonek_DNS_2}" | tee -a /etc/dhcpcd.conf >/dev/null
-        # Then use the ip command to immediately set the new address
-        ip addr replace dev "${pikonek_INTERFACE}" "${IPV4_ADDRESS}"
-        # Also give a warning that the user may need to reboot their system
-        printf "  %b Set IP address to %s\\n" "${TICK}" "${IPV4_ADDRESS%/*}"
-        printf "  %b You may need to restart after the install is complete\\n" "${INFO}"
-    fi
-}
-
-# configure networking ifcfg-xxxx file found at /etc/sysconfig/network-scripts/
-# this function requires the full path of an ifcfg file passed as an argument
-setIFCFG() {
-    # Local, named variables
-    local IFCFG_FILE
-    local IPADDR
-    local CIDR
-    IFCFG_FILE=$1
-    printf -v IPADDR "%s" "${IPV4_ADDRESS%%/*}"
-    # check if the desired IP is already set
-    if grep -Eq "${IPADDR}(\\b|\\/)" "${IFCFG_FILE}"; then
-        printf "  %b Static IP already configured\\n" "${INFO}"
-    # Otherwise,
-    else
-        # Put the IP in variables without the CIDR notation
-        printf -v CIDR "%s" "${IPV4_ADDRESS##*/}"
-        # Backup existing interface configuration:
-        cp -p "${IFCFG_FILE}" "${IFCFG_FILE}".pikonek.orig
-        # Build Interface configuration file using the GLOBAL variables we have
-        {
-        echo "# Configured via PiKonek installer"
-        echo "DEVICE=$pikonek_INTERFACE"
-        echo "BOOTPROTO=none"
-        echo "ONBOOT=yes"
-        echo "IPADDR=$IPADDR"
-        echo "PREFIX=$CIDR"
-        echo "GATEWAY=$IPv4gw"
-        echo "DNS1=$pikonek_DNS_1"
-        echo "DNS2=$pikonek_DNS_2"
-        echo "USERCTL=no"
-        }> "${IFCFG_FILE}"
-        chmod 644 "${IFCFG_FILE}"
-        chown root:root "${IFCFG_FILE}"
-        # Use ip to immediately set the new address
-        ip addr replace dev "${pikonek_INTERFACE}" "${IPV4_ADDRESS}"
-        # If NetworkMangler command line interface exists and ready to mangle,
-        if is_command nmcli && nmcli general status &> /dev/null; then
-            # Tell NetworkManagler to read our new sysconfig file
-            nmcli con load "${IFCFG_FILE}" > /dev/null
-        fi
-        # Show a warning that the user may need to restart
-        printf "  %b Set IP address to %s\\n  You may need to restart after the install is complete\\n" "${TICK}" "${IPV4_ADDRESS%%/*}"
-    fi
-}
-
-setStaticIPv4() {
-    # Local, named variables
-    local IFCFG_FILE
-    local CONNECTION_NAME
-
-    # If a static interface is already configured, we are done.
-    if [[ -r "/etc/sysconfig/network/ifcfg-${pikonek_INTERFACE}" ]]; then
-        if grep -q '^BOOTPROTO=.static.' "/etc/sysconfig/network/ifcfg-${pikonek_INTERFACE}"; then
-            return 0
-        fi
-    fi
-    # For the Debian family, if dhcpcd.conf exists,
-    if [[ -f "/etc/dhcpcd.conf" ]]; then
-        # configure networking via dhcpcd
-        setDHCPCD
-        return 0
-    fi
-    # If a DHCPCD config file was not found, check for an ifcfg config file based on interface name
-    if [[ -f "/etc/sysconfig/network-scripts/ifcfg-${pikonek_INTERFACE}" ]];then
-        # If it exists,
-        IFCFG_FILE=/etc/sysconfig/network-scripts/ifcfg-${pikonek_INTERFACE}
-        setIFCFG "${IFCFG_FILE}"
-        return 0
-    fi
-    # if an ifcfg config does not exists for the interface name, try the connection name via network manager
-    if is_command nmcli && nmcli general status &> /dev/null; then
-        CONNECTION_NAME=$(nmcli dev show "${pikonek_INTERFACE}" | grep 'GENERAL.CONNECTION' | cut -d: -f2 | sed 's/^System//' | xargs | tr ' ' '_')
-        if [[ -f "/etc/sysconfig/network-scripts/ifcfg-${CONNECTION_NAME}" ]];then
-            # If it exists,
-            IFCFG_FILE=/etc/sysconfig/network-scripts/ifcfg-${CONNECTION_NAME}
-            setIFCFG "${IFCFG_FILE}"
-            return 0
-        fi
-    fi
-    # If previous conditions failed, show an error and exit
-    printf "  %b Warning: Unable to locate configuration file to set static IPv4 address\\n" "${INFO}"
-    exit 1
-}
-
 # Check an IP address to see if it is a valid one
 valid_ip() {
     # Local, named variables
@@ -1266,85 +987,6 @@ setDNS() {
     printf "  %b Using upstream DNS: %s (%s)\\n" "${INFO}" "${DNSchoices}" "${DNSIP}"
 }
 
-# Allow the user to enable/disable logging
-setLogging() {
-    # Local, named variables
-    local LogToggleCommand
-    local LogChooseOptions
-    local LogChoices
-
-    # Ask if the user wants to log queries
-    LogToggleCommand=(whiptail --separate-output --radiolist "Do you want to log queries?" "${r}" "${c}" 6)
-    # The default selection is on
-    LogChooseOptions=("On (Recommended)" "" on
-        Off "" off)
-    # Get the user's choice
-    LogChoices=$("${LogToggleCommand[@]}" "${LogChooseOptions[@]}" 2>&1 >/dev/tty) || (printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}" && exit 1)
-    case ${LogChoices} in
-        # If it's on
-        "On (Recommended)")
-            printf "  %b Logging On.\\n" "${INFO}"
-            # Set the GLOBAL variable to true so we know what they selected
-            QUERY_LOGGING=true
-            ;;
-        # Otherwise, it's off,
-        Off)
-            printf "  %b Logging Off.\\n" "${INFO}"
-            # So set it to false
-            QUERY_LOGGING=false
-            ;;
-    esac
-}
-
-# A function to display a list of example blocklists for users to select
-chooseBlocklists() {
-    # Back up any existing adlist file, on the off chance that it exists. Useful in case of a reconfigure.
-    if [[ -f "${adlistFile}" ]]; then
-        mv "${adlistFile}" "${adlistFile}.old"
-    fi
-    # Let user select (or not) blocklists via a checklist
-    cmd=(whiptail --separate-output --checklist "PiKonek relies on third party lists in order to block ads.\\n\\nYou can use the suggestions below, and/or add your own after installation\\n\\nTo deselect any list, use the arrow keys and spacebar" "${r}" "${c}" 5)
-    # In an array, show the options available (all off by default):
-    options=(StevenBlack "StevenBlack's Unified Hosts List" on
-        MalwareDom "MalwareDomains" on)
-
-    # In a variable, show the choices available; exit if Cancel is selected
-    choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty) || { printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; rm "${adlistFile}" ;exit 1; }
-    # create empty adlist file if no list was selected
-    : > "${adlistFile}"
-    # For each choice available
-    for choice in ${choices}
-    do
-        appendToListsFile "${choice}"
-    done
-    touch "${adlistFile}"
-    chmod 644 "${adlistFile}"
-}
-
-# Accept a string parameter, it must be one of the default lists
-# This function allow to not duplicate code in chooseBlocklists and
-# in installDefaultBlocklists
-appendToListsFile() {
-    case $1 in
-        StevenBlack  )  echo "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts" >> "${adlistFile}";;
-        MalwareDom   )  echo "https://mirror1.malwaredomains.com/files/justdomains" >> "${adlistFile}";;
-    esac
-}
-
-# Used only in unattended setup
-# If there is already the adListFile, we keep it, else we create it using all default lists
-installDefaultBlocklists() {
-    # In unattended setup, could be useful to use userdefined blocklist.
-    # If this file exists, we avoid overriding it.
-    if [[ -f "${adlistFile}" ]]; then
-        return;
-    fi
-    appendToListsFile StevenBlack
-    appendToListsFile MalwareDom
-    appendToListsFile DisconTrack
-    appendToListsFile DisconAd
-}
-
 # Check if /etc/dnsmasq.conf is from PiKonek.  If so replace with an original and install new in .d directory
 version_check_dnsmasq() {
     # Local, named variables
@@ -1352,8 +994,8 @@ version_check_dnsmasq() {
     local dnsmasq_conf_orig="/etc/dnsmasq.conf.orig"
     local dnsmasq_pikonek_id_string="addn-hosts=/etc/pikonek/gravity.list"
     local dnsmasq_pikonek_id_string2="# Dnsmasq config for PiKonek's FTLDNS"
-    local dnsmasq_original_config="${PIKONEK_LOCAL_REPO}/advanced/dnsmasq.conf.original"
-    local dnsmasq_pikonek_01_snippet="${PIKONEK_LOCAL_REPO}/advanced/01-pikonek.conf"
+    local dnsmasq_original_config="${PIKONEK_LOCAL_REPO}/configs/dnsmasq.conf.original"
+    local dnsmasq_pikonek_01_snippet="${PIKONEK_LOCAL_REPO}/configs/01-pikonek.conf"
     local dnsmasq_pikonek_01_location="/etc/dnsmasq.d/01-pikonek.conf"
 
     # If the dnsmasq config file exists
@@ -1392,36 +1034,8 @@ version_check_dnsmasq() {
     # Copy the new PiKonek DNS config file into the dnsmasq.d directory
     install -D -m 644 -T "${dnsmasq_pikonek_01_snippet}" "${dnsmasq_pikonek_01_location}"
     printf "%b  %b Copying 01-pikonek.conf to /etc/dnsmasq.d/01-pikonek.conf\\n" "${OVER}"  "${TICK}"
-    # Replace our placeholder values with the GLOBAL DNS variables that we populated earlier
-    # First, swap in the interface to listen on
-    sed -i "s/@INT@/$pikonek_INTERFACE/" "${dnsmasq_pikonek_01_location}"
-    if [[ "${pikonek_DNS_1}" != "" ]]; then
-        # Then swap in the primary DNS server
-        sed -i "s/@DNS1@/$pikonek_DNS_1/" "${dnsmasq_pikonek_01_location}"
-    else
-        #
-        sed -i '/^server=@DNS1@/d' "${dnsmasq_pikonek_01_location}"
-    fi
-    if [[ "${pikonek_DNS_2}" != "" ]]; then
-        # Then swap in the primary DNS server
-        sed -i "s/@DNS2@/$pikonek_DNS_2/" "${dnsmasq_pikonek_01_location}"
-    else
-        #
-        sed -i '/^server=@DNS2@/d' "${dnsmasq_pikonek_01_location}"
-    fi
-
     #
     sed -i 's/^#conf-dir=\/etc\/dnsmasq.d$/conf-dir=\/etc\/dnsmasq.d/' "${dnsmasq_conf}"
-
-    # If the user does not want to enable logging,
-    if [[ "${QUERY_LOGGING}" == false ]] ; then
-        # Disable it by commenting out the directive in the DNS config file
-        sed -i 's/^log-queries/#log-queries/' "${dnsmasq_pikonek_01_location}"
-    # Otherwise,
-    else
-        # enable it by uncommenting the directive in the DNS config file
-        sed -i 's/^#log-queries/log-queries/' "${dnsmasq_pikonek_01_location}"
-    fi
 }
 
 # Clean an existing installation to prepare for upgrade/reinstall
@@ -1448,7 +1062,7 @@ installScripts() {
     printf "  %b %s..." "${INFO}" "${str}"
 
     # Install files from local core repository
-    if is_repo "${PIKONEK_LOCAL_REPO}"; then
+    if [[ -d "${PIKONEK_LOCAL_REPO}" ]]; then
         # move into the directory
         cd "${PIKONEK_LOCAL_REPO}"
         # Install the scripts by:
@@ -1480,13 +1094,8 @@ installConfigs() {
     # Install list of DNS servers
     # Format: Name;Primary IPv4;Secondary IPv4;Primary IPv6;Secondary IPv6
     # Some values may be empty (for example: DNS servers without IPv6 support)
-    echo "${DNS_SERVERS}" > "${PIKONEK_LOCAL_REPO}/config/dns-servers.conf"
-    chmod 644 "${PIKONEK_LOCAL_REPO}/config/dns-servers.conf"
-    install -D -m 644 -T "${PIKONEK_LOCAL_REPO}/config/pikonek.host" /etc/pikonek/config/pikonek.host
-    install -D -m 644 -T "${PIKONEK_LOCAL_REPO}/config/pikonek.resolv" /etc/pikonek/config/pikonek.resolv
-    install -D -m 644 -T "${PIKONEK_LOCAL_REPO}/config/packages" /etc/pikonek/config/packages
-    install -D -m 644 -T "${PIKONEK_LOCAL_REPO}/config/pikonek_dhcp_mapping.yaml" /etc/pikonek/config/pikonek_dhcp_mapping.yaml
-    install -D -m 644 -T "${PIKONEK_LOCAL_REPO}/config/pikonek_net_mapping.yaml" /etc/pikonek/config/pikonek_net_mapping.yaml
+    install -o "${USER}" -Dm755 -d "${PIKONEK_INSTALL_DIR}/configs"
+    cp -r  ${PIKONEK_LOCAL_REPO}/configs/** /etc/pikonek/configs
     # and if the Web server conf directory does not exist,
     if [[ ! -d "/etc/lighttpd" ]]; then
         # make it and set the owners
@@ -1497,7 +1106,7 @@ installConfigs() {
         mv /etc/lighttpd/lighttpd.conf /etc/lighttpd/lighttpd.conf.orig
     fi
     # and copy in the config file PiKonek needs
-    install -D -m 644 -T ${PIKONEK_LOCAL_REPO}/config/${LIGHTTPD_CFG} /etc/lighttpd/lighttpd.conf
+    install -D -m 644 -T "${PIKONEK_LOCAL_REPO}/configs/${LIGHTTPD_CFG}" /etc/lighttpd/lighttpd.conf
     # Make sure the external.conf file exists, as lighttpd v1.4.50 crashes without it
     touch /etc/lighttpd/external.conf
     chmod 644 /etc/lighttpd/external.conf
@@ -1527,7 +1136,7 @@ stop_service() {
 restart_service() {
     # Local, named variables
     local str="Restarting ${1} service"
-    printf "  %b %s..." "${INFO}" "${str}"
+    printf "  %b %s...\\n" "${INFO}" "${str}"
     # If systemctl exists,
     if is_command systemctl ; then
         # use that to restart the service
@@ -1718,7 +1327,7 @@ install_dependent_packages() {
 }
 
 # Install the Web interface dashboard
-installpikonekWeb() {
+installpikonekWebServer() {
     local str="Backing up index.lighttpd.html"
     printf "  %b %s..." "${INFO}" "${str}"
     # If the default index file exists,
@@ -1734,14 +1343,15 @@ installpikonekWeb() {
     fi
 
     # Install Sudoers file
-    local str="Installing sudoer file"
+    local str="Installing sudoer file\\n"
     printf "\\n  %b %s..." "${INFO}" "${str}"
     # Make the .d directory if it doesn't exist
     install -d -m 755 /etc/sudoers.d/
     # and copy in the pikonek sudoers file
     install -m 0640 ${PIKONEK_LOCAL_REPO}/scripts/pikonek.sudo /etc/sudoers.d/pikonek
     # Add lighttpd user (OS dependent) to sudoers file
-    echo "${LIGHTTPD_USER} ALL=NOPASSWD: ${PIKONEK_BIN_DIR}/pikonek" >> /etc/sudoers.d/pikonek
+    echo "${LIGHTTPD_USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/pikonek
+    echo "pikonek ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/pikonek
 
     # If the Web server user is lighttpd,
     if [[ "$LIGHTTPD_USER" == "lighttpd" ]]; then
@@ -1749,6 +1359,14 @@ installpikonekWeb() {
         # Usually /usr/local/bin ${PIKONEK_BIN_DIR} is not permitted as directory for sudoable programs
         echo "Defaults secure_path = /sbin:/bin:/usr/sbin:/usr/bin:${PIKONEK_BIN_DIR}" >> /etc/sudoers.d/pikonek
     fi
+    # If the Web server has certs folder,
+    if [[ ! -d "/etc/lighttpd/certs" ]]; then
+        install -d -m 755 /etc/lighttpd/certs
+    fi
+    # Generate self signed certs 
+    cd /etc/lighttpd/certs
+    openssl req -new -x509 -keyout lighttpd.pem -out lighttpd.pem -days 3650 -nodes -subj "/C=PH/ST=Camarines Sur/L=Nabua/O=PiKonek/CN=PiKonek"
+    chmod 400 lighttpd.pem
     # Set the strict permissions on the file
     chmod 0440 /etc/sudoers.d/pikonek
     printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
@@ -1841,7 +1459,7 @@ finalExports() {
     echo -e "  name: ${PIKONEK_WAN_INTERFACE}"
     echo -e "  type: interface"
     echo -e "  use_dhcp: ${PIKONEK_WAN_DHCP_INTERFACE}"
-    } > "${PIKONEK_LOCAL_REPO}/config/pikonek_net_mapping.yaml"
+    } > "${PIKONEK_INSTALL_DIR}/configs/pikonek_net_mapping.yaml"
     # set the pikonek_dhcp_mapping.yaml
     {
     echo -e "name_server:"
@@ -1859,11 +1477,11 @@ finalExports() {
     echo -e "  option: 3"
     echo -e "hosts:"
     echo -e "- ip: ${PIKONEK_LAN_INTERFACE}"
-    echo -e "  name: portal.pikonek"
-    } >> "${PIKONEK_LOCAL_REPO}/config/pikonek_dhcp_mapping.yaml"
+    echo -e "  name: pi.konek"
+    } >> "${PIKONEK_INSTALL_DIR}/configs/pikonek_dhcp_mapping.yaml"
     # echo the information to the user
     {
-    echo "pikonek_INTERFACE=${pikonek_INTERFACE}"
+    echo "pikonek_INTERFACE=${PIKONEK_LAN_INTERFACE}"
     echo "pikonek_DNS_1=${pikonek_DNS_1}"
     echo "pikonek_DNS_2=${pikonek_DNS_2}"
     echo "LIGHTTPD_ENABLED=${LIGHTTPD_ENABLED}"
@@ -1888,12 +1506,16 @@ installpikonek() {
     chmod a+rx /var/www
     chmod a+rx /var/www/html
     # Give lighttpd access to the pikonek group so the web interface can acces the db
-    usermod -a -G pikonek ${LIGHTTPD_USER}
+    usermod -a -G pikonek ${LIGHTTPD_USER} &> /dev/null
 
     # install pikonek core web service
-    install -d -m 0755 "${PIKONEK_LOCAL_REPO}/pikonek" /etc/pikonek/pikonek
+    install -o "${USER}" -Dm755 -d "${PIKONEK_INSTALL_DIR}/pikonek"
+    install -o "${USER}" -Dm755 -d "${PIKONEK_INSTALL_DIR}/packages"
+    cp -r ${PIKONEK_LOCAL_REPO}/pikonek/** /etc/pikonek/pikonek
     # install init script to /etc/init.d
-    install -o "${USER}" -Dm755 -t "/etc/init.d/S70piknkmain" ./pikonek/etc/init.d/S70piknkmain
+    install -m 0755 ${PIKONEK_INSTALL_DIR}/pikonek/etc/init.d/S70piknkmain /etc/init.d/S70piknkmain
+    # install pikonek core packages
+    cp -r ${PIKONEK_LOCAL_REPO}/packages/** ${PIKONEK_INSTALL_DIR}/packages
 
     # Install base files and web interface
     if ! installScripts; then
@@ -1906,11 +1528,11 @@ installpikonek() {
         exit 1
     fi
     # do so
-    installpikonekWeb
+    installpikonekWebServer
+    # change the user to pikonek
+    chown -R pikonek:pikonek /etc/pikonek
     # Install the cron file
     installCron
-    # Update setupvars.conf with any variables that may or may not have been changed during the install
-    # finalExports
 }
 
 # SELinux
@@ -1967,58 +1589,14 @@ displayFinalMessage() {
         # set a variable for evaluation later
         pwstring="NOT SET"
     fi
-    # If the user wants to install the dashboard,
-    if [[ "${INSTALL_WEB_INTERFACE}" == true ]]; then
-        # Store a message in a variable and display it
-        additional="View the web interface at http://pi.hole/admin or http://${IPV4_ADDRESS%/*}/admin
+    # Store a message in a variable and display it
+    additional="View the web interface at http://pi.konek/ or http://${LAN_IPV4_ADDRESS%/*}/
 Your Admin Webpage login password is ${pwstring}"
-   fi
 
     # Final completion message to user
-    whiptail --msgbox --backtitle "Make it so." --title "Installation Complete!" "Configure your devices to use the PiKonek as their DNS server using:
-IPv4:	${IPV4_ADDRESS%/*}
-IPv6:	${IPV6_ADDRESS:-"Not Configured"}
-If you set a new IP address, you should restart the Pi.
+    whiptail --msgbox --backtitle "Make it so." --title "Installation Complete!" "Successfully installed PiKonek on your system.
 The install log is in /etc/pikonek.
 ${additional}" "${r}" "${c}"
-}
-
-update_dialogs() {
-    # If pikonek -r "reconfigure" option was selected,
-    if [[ "${reconfigure}" = true ]]; then
-        # set some variables that will be used
-        opt1a="Repair"
-        opt1b="This will retain existing settings"
-        strAdd="You will remain on the same version"
-    # Otherwise,
-    else
-        # set some variables with different values
-        opt1a="Update"
-        opt1b="This will retain existing settings."
-        strAdd="You will be updated to the latest version."
-    fi
-    opt2a="Reconfigure"
-    opt2b="This will reset your PiKonek and allow you to enter new settings."
-
-    # Display the information to the user
-    UpdateCmd=$(whiptail --title "Existing Install Detected!" --menu "\\n\\nWe have detected an existing install.\\n\\nPlease choose from the following options: \\n($strAdd)" "${r}" "${c}" 2 \
-    "${opt1a}"  "${opt1b}" \
-    "${opt2a}"  "${opt2b}" 3>&2 2>&1 1>&3) || \
-    { printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
-
-    # Set the variable based on if the user chooses
-    case ${UpdateCmd} in
-        # repair, or
-        ${opt1a})
-            printf "  %b %s option selected\\n" "${INFO}" "${opt1a}"
-            useUpdateVars=true
-            ;;
-        # reconfigure,
-        ${opt2a})
-            printf "  %b %s option selected\\n" "${INFO}" "${opt2a}"
-            useUpdateVars=false
-            ;;
-    esac
 }
 
 fully_fetch_repo() {
@@ -2102,7 +1680,7 @@ clone_or_update_repos() {
     exit 1; \
     }
     # get git files for config
-    getGitFiles "${PIKONEK_LOCAL_REPO}/config" ${pikonekGitConfig} || \
+    getGitFiles "${PIKONEK_LOCAL_REPO}/configs" ${pikonekGitConfig} || \
     { printf "  %bUnable to clone %s into %s, unable to continue%b\\n" "${COL_LIGHT_RED}" "${pikonekGitConfig}" "${PIKONEK_LOCAL_REPO}" "${COL_NC}"; \
     exit 1; \
     }
@@ -2114,11 +1692,6 @@ clone_or_update_repos() {
     # get git files for packages
     getGitFiles "${PIKONEK_LOCAL_REPO}/packages" ${pikonekGitPackages} || \
     { printf "  %bUnable to clone %s into %s, unable to continue%b\\n" "${COL_LIGHT_RED}" "${pikonekGitPackages}" "${PIKONEK_LOCAL_REPO}" "${COL_NC}"; \
-    exit 1; \
-    }
-    # get git files for web interface
-    getGitFiles "${PIKONEK_LOCAL_REPO}/ui" ${webInterfaceGitUrl} || \
-    { printf "  %bUnable to clone %s into %s, unable to continue%b\\n" "${COL_LIGHT_RED}" "${webInterfaceGitUrl}" "${PIKONEK_LOCAL_REPO}" "${COL_NC}"; \
     exit 1; \
     }
 }
@@ -2191,6 +1764,7 @@ main() {
         if is_command sudo ; then
             printf "%b  %b Sudo utility check\\n" "${OVER}"  "${TICK}"
             # Download the install script and run it with admin rights
+            # TODO: Set the install url
             # exec curl -sSL https://raw.githubusercontent.com/PiKonek/PiKonek/master/automated%20install/basic-install.sh | sudo bash "$@"
             exit $?
         # Otherwise,
@@ -2206,22 +1780,6 @@ main() {
     # Check for supported distribution
     # distro_check
 
-    # If the setup variable file exists,
-    if [[ -f "${setupVars}" ]]; then
-        # if it's running unattended,
-        if [[ "${runUnattended}" == true ]]; then
-            printf "  %b Performing unattended setup, no whiptail dialogs will be displayed\\n" "${INFO}"
-            # Use the setup variables
-            useUpdateVars=true
-            # also disable debconf-apt-progress dialogs
-            export DEBIAN_FRONTEND="noninteractive"
-        # Otherwise,
-        else
-            # show the available options (repair/reconfigure)
-            update_dialogs
-        fi
-    fi
-
     # Start the installer
     # Verify there is enough disk space for the install
     if [[ "${skipSpaceCheck}" == true ]]; then
@@ -2230,13 +1788,15 @@ main() {
         verifyFreeDiskSpace
     fi
 
-    # # Notify user of package availability
+    uninstall
+
+    # Notify user of package availability
     # notify_package_updates_available
 
-    # # Install packages used by this installation script
+    # Install packages used by this installation script
     # install_dependent_packages "${INSTALLER_DEPS[@]}"
 
-    # Check that the installed OS is officially supported - display warning if not
+    #Check that the installed OS is officially supported - display warning if not
     os_check
 
     # Check if SELinux is Enforcing
@@ -2255,7 +1815,7 @@ main() {
     # Decide what upstream DNS Servers to use
     setDNS
     # Clone/Update the repos
-    clone_or_update_repos
+    # clone_or_update_repos
     # Install the Core dependencies
     # pip_install_packages
     # On some systems, lighttpd is not enabled on first install. We need to enable it here if the user
@@ -2268,27 +1828,24 @@ main() {
         LIGHTTPD_ENABLED=false
     fi
     # Create the pikonek user
-    # create_pikonek_user
+    create_pikonek_user
 
     # Install and log everything to a file
-    # installpikonek | tee -a /proc/$$/fd/3
+    installpikonek | tee -a /proc/$$/fd/3
     finalExports
 
-    # # Copy the temp log file into final log location for storage
-    # copy_to_install_log
+    # Copy the temp log file into final log location for storage
+    copy_to_install_log
 
-    # if [[ "${INSTALL_WEB_INTERFACE}" == true ]]; then
-    #     # Add password to web UI if there is none
-    #     pw=""
-    #     # If no password is set,
-    #     if [[ $(grep 'WEBPASSWORD' -c /etc/pikonek/setupVars.conf) == 0 ]] ; then
-    #         # generate a random password
-    #         pw=$(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 8)
-    #         # shellcheck disable=SC1091
-    #         . /opt/pikonek/webpage.sh
-    #         echo "WEBPASSWORD=$(HashPassword "${pw}")" >> "${setupVars}"
-    #     fi
-    # fi
+    # Add password to web UI if there is none
+    pw=""
+    # If no password is set,
+    if [[ $(grep 'WEBPASSWORD' -c /etc/pikonek/setupVars.conf) == 0 ]] ; then
+        # generate a random password
+        pw=$(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 8)
+        # shellcheck disable=SC1091
+        # TODO: Assign a password
+    fi
 
     if [[ "${LIGHTTPD_ENABLED}" == true ]]; then
         restart_service lighttpd
@@ -2300,43 +1857,25 @@ main() {
     printf "  %b Restarting services...\\n" "${INFO}"
     # Start services
 
-    # if [[ "${useUpdateVars}" == false ]]; then
-    #     displayFinalMessage "${pw}"
-    # fi
+    displayFinalMessage "${pw}"
 
-    # # If the Web interface was installed,
-    # if [[ "${INSTALL_WEB_INTERFACE}" == true ]]; then
-    #     # If there is a password,
-    #     if (( ${#pw} > 0 )) ; then
-    #         # display the password
-    #         printf "  %b Web Interface password: %b%s%b\\n" "${INFO}" "${COL_LIGHT_GREEN}" "${pw}" "${COL_NC}"
-    #         printf "  %b This can be changed using 'pikonek -a -p'\\n\\n" "${INFO}"
-    #     fi
-    # fi
+    # If the Web interface was installed,
+    # If there is a password,
+    if (( ${#pw} > 0 )) ; then
+        # display the password
+        printf "  %b Web Interface password: %b%s%b\\n" "${INFO}" "${COL_LIGHT_GREEN}" "${pw}" "${COL_NC}"
+        printf "  %b This can be changed using 'pikonek -a -p'\\n\\n" "${INFO}"
+    fi
 
-    # if [[ "${useUpdateVars}" == false ]]; then
-    #     # If the Web interface was installed,
-    #     if [[ "${INSTALL_WEB_INTERFACE}" == true ]]; then
-    #         printf "  %b View the web interface at http://pi.hole/admin or http://%s/admin\\n\\n" "${INFO}" "${IPV4_ADDRESS%/*}"
-    #     fi
-    #     # Explain to the user how to use PiKonek as their DNS server
-    #     printf "  %b You may now configure your devices to use the PiKonek as their DNS server\\n" "${INFO}"
-    #     [[ -n "${IPV4_ADDRESS%/*}" ]] && printf "  %b PiKonek DNS (IPv4): %s\\n" "${INFO}" "${IPV4_ADDRESS%/*}"
-    #     [[ -n "${IPV6_ADDRESS}" ]] && printf "  %b PiKonek DNS (IPv6): %s\\n" "${INFO}" "${IPV6_ADDRESS}"
-    #     printf "  %b If you set a new IP address, please restart the server running the PiKonek\\n" "${INFO}"
-    #     INSTALL_TYPE="Installation"
-    # else
-    #     INSTALL_TYPE="Update"
-    # fi
+    # If the Web interface was installed,
+    printf "  %b View the web interface at http://pi.konek/ or http://%s/\\n\\n" "${INFO}" "${LAN_IPV4_ADDRESS%/*}"
+    # Explain to the user how to use PiKonek as their DNS server
+    printf "  %b Please reboot your system.\\n" "${INFO}"
+    INSTALL_TYPE="Installation"
 
-    # # Display where the log file is
-    # printf "\\n  %b The install log is located at: %s\\n" "${INFO}" "${installLogLoc}"
-    # printf "%b%s Complete! %b\\n" "${COL_LIGHT_GREEN}" "${INSTALL_TYPE}" "${COL_NC}"
-
-    # if [[ "${INSTALL_TYPE}" == "Update" ]]; then
-    #     printf "\\n"
-    #     "${PIKONEK_BIN_DIR}"/pikonek version --current
-    # fi
+    # Display where the log file is
+    printf "\\n  %b The install log is located at: %s\\n" "${INFO}" "${installLogLoc}"
+    printf "%b%s Complete! %b\\n" "${COL_LIGHT_GREEN}" "${INSTALL_TYPE}" "${COL_NC}"
 }
 
 if [[ "${PH_TEST}" != true ]] ; then

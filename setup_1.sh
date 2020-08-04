@@ -308,6 +308,7 @@ function setup_dhcp_dns() {
 echo -e "[.] Building target side installer"
 
 packages="apache2
+lighttpd
 hostapd
 sqlite3
 ipcalc
