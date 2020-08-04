@@ -44,13 +44,13 @@ pikonekGitUrl="https://github.com/leond08/pikonek.git"
 pikonekGitConfig="https://github.com/leond08/configs.git"
 pikonekGitScripts="https://github.com/leond08/scripts.git"
 pikonekGitPackages="https://github.com/leond08/packages.git"
+pikonekGitBlockedList="https://github.com/leond08/blocked.git"
 PIKONEK_LOCAL_REPO="/etc/.pikonek"
 # This directory is where the PiKonek scripts will be installed
 PIKONEK_INSTALL_DIR="/etc/pikonek"
 PIKONEK_BIN_DIR="/usr/local/bin"
 useUpdateVars=false
 
-adlistFile="/etc/pikonek/adlists.list"
 # PiKonek needs an IP address; to begin, these variables are empty since we don't know what the IP is until
 # this script can run
 IPV4_ADDRESS=${IPV4_ADDRESS}
@@ -133,10 +133,13 @@ uninstall() {
     rm -rf "${PIKONEK_INSTALL_DIR}/setupVars.conf"
     rm -rf "${PIKONEK_INSTALL_DIR}/setupVars.conf.update.bak"
     rm -rf "${PIKONEK_INSTALL_DIR}/install.log"
+    rm -rf "${PIKONEK_INSTALL_DIR}/blocked"
+    rm -rf "${PIKONEK_INSTALL_DIR}"
     rm -rf /etc/dnsmasq.d/01-pikonek.conf
     rm -rf /etc/init.d/S70piknkmain
     rm -rf /etc/sudoers.d/pikonek
     rm -rf /etc/cron.d/pikonek
+    rm -rf /etc/cron.daily/pikonekupdateblockedlist
 }
 
 is_command() {
@@ -694,7 +697,7 @@ getStaticIPv4LanSettings() {
     LAN_IPV4_ADDRESS="10.0.0.1/24"
     # Ask if the user wants to use DHCP settings as their static IP
     # This is useful for users that are using DHCP reservations; then we can just use the information gathered via our functions
-    whiptail --title "LAN Static IP Address" --msgbox "Configure IPv4 Static Address for LAN Interface." 8 78
+    whiptail --title "LAN Static IP Address" --msgbox "Configure IPv4 Static Address for LAN Interface." "${r}" "${c}"
     # Otherwise, we need to ask the user to input their desired settings.
     # Start by getting the IPv4 address (pre-filling it with info gathered from DHCP)
     # Start a loop to let the user enter their information with the chance to go back and edit it if necessary
@@ -991,9 +994,6 @@ setDNS() {
 version_check_dnsmasq() {
     # Local, named variables
     local dnsmasq_conf="/etc/dnsmasq.conf"
-    local dnsmasq_conf_orig="/etc/dnsmasq.conf.orig"
-    local dnsmasq_pikonek_id_string="addn-hosts=/etc/pikonek/gravity.list"
-    local dnsmasq_pikonek_id_string2="# Dnsmasq config for PiKonek's FTLDNS"
     local dnsmasq_original_config="${PIKONEK_LOCAL_REPO}/configs/dnsmasq.conf.original"
     local dnsmasq_pikonek_01_snippet="${PIKONEK_LOCAL_REPO}/configs/01-pikonek.conf"
     local dnsmasq_pikonek_01_location="/etc/dnsmasq.d/01-pikonek.conf"
@@ -1001,23 +1001,8 @@ version_check_dnsmasq() {
     # If the dnsmasq config file exists
     if [[ -f "${dnsmasq_conf}" ]]; then
         printf "  %b Existing dnsmasq.conf found..." "${INFO}"
-        # If a specific string is found within this file, we presume it's from older versions on PiKonek,
-        if grep -q "${dnsmasq_pikonek_id_string}" "${dnsmasq_conf}" ||
-           grep -q "${dnsmasq_pikonek_id_string2}" "${dnsmasq_conf}"; then
-            printf " it is from a previous PiKonek install.\\n"
-            printf "  %b Backing up dnsmasq.conf to dnsmasq.conf.orig..." "${INFO}"
-            # so backup the original file
-            mv -f "${dnsmasq_conf}" "${dnsmasq_conf_orig}"
-            printf "%b  %b Backing up dnsmasq.conf to dnsmasq.conf.orig...\\n" "${OVER}"  "${TICK}"
-            printf "  %b Restoring default dnsmasq.conf..." "${INFO}"
-            # and replace it with the default
-            install -D -m 644 -T "${dnsmasq_original_config}" "${dnsmasq_conf}"
-            printf "%b  %b Restoring default dnsmasq.conf...\\n" "${OVER}"  "${TICK}"
-        # Otherwise,
-        else
         # Don't to anything
         printf " it is not a PiKonek file, leaving alone!\\n"
-        fi
     else
         # If a file cannot be found,
         printf "  %b No dnsmasq.conf found... restoring default dnsmasq.conf..." "${INFO}"
@@ -1035,7 +1020,8 @@ version_check_dnsmasq() {
     install -D -m 644 -T "${dnsmasq_pikonek_01_snippet}" "${dnsmasq_pikonek_01_location}"
     printf "%b  %b Copying 01-pikonek.conf to /etc/dnsmasq.d/01-pikonek.conf\\n" "${OVER}"  "${TICK}"
     #
-    sed -i 's/^#conf-dir=\/etc\/dnsmasq.d$/conf-dir=\/etc\/dnsmasq.d/' "${dnsmasq_conf}"
+    echo "conf-dir=/etc/dnsmasq.d" > "${dnsmasq_conf}"
+    chmod 644 "${dnsmasq_conf}"
 }
 
 # Clean an existing installation to prepare for upgrade/reinstall
@@ -1054,6 +1040,63 @@ clean_existing() {
         rm -f "${clean_directory}/${script}.sh"
     done
 }
+
+# Install base files and web interface
+installpikonek() {
+    # If the user wants to install the Web interface,
+    if [[ ! -d "${webroot}" ]]; then
+        # make the Web directory if necessary
+        install -d -m 0755 ${webroot}
+    fi
+
+    chown ${LIGHTTPD_USER}:${LIGHTTPD_GROUP} ${webroot}
+    chmod 0775 ${webroot}
+    # Repair permissions if /var/www/html is not world readable
+    chmod a+rx /var/www
+    chmod a+rx /var/www/html
+    # Give lighttpd access to the pikonek group so the web interface can acces the db
+    usermod -a -G pikonek ${LIGHTTPD_USER} &> /dev/null
+
+    # install pikonek core web service
+    install -o "${USER}" -Dm755 -d "${PIKONEK_INSTALL_DIR}/pikonek"
+    install -o "${USER}" -Dm755 -d "${PIKONEK_INSTALL_DIR}/packages"
+    install -o "${USER}" -Dm755 -d "${PIKONEK_INSTALL_DIR}/blocked"
+    cp -r ${PIKONEK_LOCAL_REPO}/pikonek/** /etc/pikonek/pikonek
+    # install init script to /etc/init.d
+    install -m 0755 ${PIKONEK_INSTALL_DIR}/pikonek/etc/init.d/S70piknkmain /etc/init.d/S70piknkmain
+    # install pikonek core packages
+    cp -r ${PIKONEK_LOCAL_REPO}/packages/** ${PIKONEK_INSTALL_DIR}/packages
+    cp -r ${PIKONEK_LOCAL_REPO}/blocked/** ${PIKONEK_INSTALL_DIR}/blocked
+
+    # Install base files and web interface
+    if ! installScripts; then
+        printf "  %b Failure in dependent script copy function.\\n" "${CROSS}"
+        exit 1
+    fi
+    # Install config files
+    if ! installConfigs; then
+        printf "  %b Failure in dependent config copy function.\\n" "${CROSS}"
+        exit 1
+    fi
+    # install default blocked list
+    installDefaultBlockedList
+    # install web server
+    installpikonekWebServer
+    # change the user to pikonek
+    chown -R pikonek:pikonek /etc/pikonek
+    # Install the cron file
+    installCron
+}
+
+# install default blocked list
+installDefaultBlockedList() {
+    local str="Installing default blocker list"
+    printf "  %b %s..." "${INFO}" "${str}"
+    curl --silent -k ${PIKONEK_INSTALL_DIR}/blocked/adware https://raw.githubusercontent.com/notracking/hosts-blocklists/master/hostnames.txt > /dev/null 2>&1
+    curl --silent -k https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn/hosts | awk '$1 == "0.0.0.0" { print "0.0.0.0 "$2}' > ${PIKONEK_INSTALL_DIR}/blocked/porn > /dev/null 2>&1
+    printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
+}
+
 
 # Install the scripts from repository to their various locations
 installScripts() {
@@ -1342,8 +1385,20 @@ installpikonekWebServer() {
         printf "      No default index.lighttpd.html file found... not backing up\\n"
     fi
 
+    # If the Web server has certs folder,
+    if [[ ! -d "/etc/lighttpd/certs" ]]; then
+        install -d -m 755 /etc/lighttpd/certs
+    fi
+    # Generate self signed certs
+    local str="Generating self signed certificate"
+    cd /etc/lighttpd/certs
+    printf "\\n  %b %s..." "${INFO}" "${str}"
+    openssl req -new -x509 -keyout lighttpd.pem -out lighttpd.pem -days 3650 -nodes -subj "/C=PH/ST=Camarines Sur/L=Nabua/O=PiKonek/CN=PiKonek" &> /dev/null 
+    chmod 400 lighttpd.pem
+    printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
+
     # Install Sudoers file
-    local str="Installing sudoer file\\n"
+    local str="Installing sudoer file"
     printf "\\n  %b %s..." "${INFO}" "${str}"
     # Make the .d directory if it doesn't exist
     install -d -m 755 /etc/sudoers.d/
@@ -1359,14 +1414,6 @@ installpikonekWebServer() {
         # Usually /usr/local/bin ${PIKONEK_BIN_DIR} is not permitted as directory for sudoable programs
         echo "Defaults secure_path = /sbin:/bin:/usr/sbin:/usr/bin:${PIKONEK_BIN_DIR}" >> /etc/sudoers.d/pikonek
     fi
-    # If the Web server has certs folder,
-    if [[ ! -d "/etc/lighttpd/certs" ]]; then
-        install -d -m 755 /etc/lighttpd/certs
-    fi
-    # Generate self signed certs 
-    cd /etc/lighttpd/certs
-    openssl req -new -x509 -keyout lighttpd.pem -out lighttpd.pem -days 3650 -nodes -subj "/C=PH/ST=Camarines Sur/L=Nabua/O=PiKonek/CN=PiKonek"
-    chmod 400 lighttpd.pem
     # Set the strict permissions on the file
     chmod 0440 /etc/sudoers.d/pikonek
     printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
@@ -1380,6 +1427,7 @@ installCron() {
     # Copy the cron file over from the local repo
     # File must not be world or group writeable and must be owned by root
     install -D -m 644 -T -o root -g root ${PIKONEK_LOCAL_REPO}/scripts/pikonek.cron /etc/cron.d/pikonek
+    install -D -m 755 -T -o root -g root ${PIKONEK_LOCAL_REPO}/scripts/pikonekupdateblockedlist /etc/cron.daily/pikonekupdateblockedlist
     printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
 }
 
@@ -1492,49 +1540,6 @@ finalExports() {
     source "${setupVars}"
 }
 
-# Install base files and web interface
-installpikonek() {
-    # If the user wants to install the Web interface,
-    if [[ ! -d "${webroot}" ]]; then
-        # make the Web directory if necessary
-        install -d -m 0755 ${webroot}
-    fi
-
-    chown ${LIGHTTPD_USER}:${LIGHTTPD_GROUP} ${webroot}
-    chmod 0775 ${webroot}
-    # Repair permissions if /var/www/html is not world readable
-    chmod a+rx /var/www
-    chmod a+rx /var/www/html
-    # Give lighttpd access to the pikonek group so the web interface can acces the db
-    usermod -a -G pikonek ${LIGHTTPD_USER} &> /dev/null
-
-    # install pikonek core web service
-    install -o "${USER}" -Dm755 -d "${PIKONEK_INSTALL_DIR}/pikonek"
-    install -o "${USER}" -Dm755 -d "${PIKONEK_INSTALL_DIR}/packages"
-    cp -r ${PIKONEK_LOCAL_REPO}/pikonek/** /etc/pikonek/pikonek
-    # install init script to /etc/init.d
-    install -m 0755 ${PIKONEK_INSTALL_DIR}/pikonek/etc/init.d/S70piknkmain /etc/init.d/S70piknkmain
-    # install pikonek core packages
-    cp -r ${PIKONEK_LOCAL_REPO}/packages/** ${PIKONEK_INSTALL_DIR}/packages
-
-    # Install base files and web interface
-    if ! installScripts; then
-        printf "  %b Failure in dependent script copy function.\\n" "${CROSS}"
-        exit 1
-    fi
-    # Install config files
-    if ! installConfigs; then
-        printf "  %b Failure in dependent config copy function.\\n" "${CROSS}"
-        exit 1
-    fi
-    # do so
-    installpikonekWebServer
-    # change the user to pikonek
-    chown -R pikonek:pikonek /etc/pikonek
-    # Install the cron file
-    installCron
-}
-
 # SELinux
 checkSelinux() {
     local DEFAULT_SELINUX
@@ -1595,6 +1600,7 @@ Your Admin Webpage login password is ${pwstring}"
 
     # Final completion message to user
     whiptail --msgbox --backtitle "Make it so." --title "Installation Complete!" "Successfully installed PiKonek on your system.
+Please reboot your sytem.
 The install log is in /etc/pikonek.
 ${additional}" "${r}" "${c}"
 }
@@ -1694,28 +1700,11 @@ clone_or_update_repos() {
     { printf "  %bUnable to clone %s into %s, unable to continue%b\\n" "${COL_LIGHT_RED}" "${pikonekGitPackages}" "${PIKONEK_LOCAL_REPO}" "${COL_NC}"; \
     exit 1; \
     }
-}
-
-disable_dnsmasq() {
-    # dnsmasq can now be stopped and disabled if it exists
-    if which dnsmasq &> /dev/null; then
-        if check_service_active "dnsmasq";then
-            printf "  %b FTL can now resolve DNS Queries without dnsmasq running separately\\n" "${INFO}"
-            stop_service dnsmasq
-            disable_service dnsmasq
-        fi
-    fi
-
-    # Backup existing /etc/dnsmasq.conf if present and ensure that
-    # /etc/dnsmasq.conf contains only "conf-dir=/etc/dnsmasq.d"
-    local conffile="/etc/dnsmasq.conf"
-    if [[ -f "${conffile}" ]]; then
-        printf "  %b Backing up %s to %s.old\\n" "${INFO}" "${conffile}" "${conffile}"
-        mv "${conffile}" "${conffile}.old"
-    fi
-    # Create /etc/dnsmasq.conf
-    echo "conf-dir=/etc/dnsmasq.d" > "${conffile}"
-    chmod 644 "${conffile}"
+    # get git files for packages
+    getGitFiles "${PIKONEK_LOCAL_REPO}/blocked" ${pikonekGitBlockedList} || \
+    { printf "  %bUnable to clone %s into %s, unable to continue%b\\n" "${COL_LIGHT_RED}" "${pikonekGitPackages}" "${PIKONEK_LOCAL_REPO}" "${COL_NC}"; \
+    exit 1; \
+    }
 }
 
 make_temporary_log() {
@@ -1796,7 +1785,7 @@ main() {
     # Install packages used by this installation script
     # install_dependent_packages "${INSTALLER_DEPS[@]}"
 
-    #Check that the installed OS is officially supported - display warning if not
+    # Check that the installed OS is officially supported - display warning if not
     os_check
 
     # Check if SELinux is Enforcing
@@ -1815,7 +1804,7 @@ main() {
     # Decide what upstream DNS Servers to use
     setDNS
     # Clone/Update the repos
-    # clone_or_update_repos
+    clone_or_update_repos
     # Install the Core dependencies
     # pip_install_packages
     # On some systems, lighttpd is not enabled on first install. We need to enable it here if the user

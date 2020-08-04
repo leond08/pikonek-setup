@@ -11,7 +11,10 @@ rm -rf "${PIKONEK_INSTALL_DIR}/packages"
 rm -rf "${PIKONEK_INSTALL_DIR}/setupVars.conf"
 rm -rf "${PIKONEK_INSTALL_DIR}/setupVars.conf.update.bak"
 rm -rf "${PIKONEK_INSTALL_DIR}/install.log"
+rm -rf "${PIKONEK_INSTALL_DIR}/blocked"
+rm -rf "${PIKONEK_INSTALL_DIR}"
 rm -rf /etc/dnsmasq.d/01-pikonek.conf
 rm -rf /etc/init.d/S70piknkmain
 rm -rf /etc/sudoers.d/pikonek
 rm -rf /etc/cron.d/pikonek
+rm -rf /etc/cron.daily/pikonekupdateblockedlist
