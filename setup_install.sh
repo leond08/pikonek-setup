@@ -1079,7 +1079,7 @@ installpikonek() {
         exit 1
     fi
     # install default blocked list
-    installDefaultBlockedList
+    # installDefaultBlockedList
     # install web server
     installpikonekWebServer
     # change the user to pikonek
@@ -1090,7 +1090,7 @@ installpikonek() {
 
 # install default blocked list
 installDefaultBlockedList() {
-    local str="Installing default blocker list"
+    local str="Installing default blocker list. This may take a while"
     printf "  %b %s..." "${INFO}" "${str}"
     curl --silent -k ${PIKONEK_INSTALL_DIR}/blocked/adware https://raw.githubusercontent.com/notracking/hosts-blocklists/master/hostnames.txt > /dev/null 2>&1
     curl --silent -k https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn/hosts | awk '$1 == "0.0.0.0" { print "0.0.0.0 "$2}' > ${PIKONEK_INSTALL_DIR}/blocked/porn > /dev/null 2>&1
@@ -1487,6 +1487,7 @@ create_pikonek_user() {
 #
 finalExports() {
     local subnet=$(ipcalc -cn $LAN_IPV4_ADDRESS | awk 'FNR == 2 {print $2}')
+    local ip_v4=$(ipcalc -cn 10.0.0.0/24 | awk 'FNR == 1 {print $2}')
     # If the setup variable file exists,
     if [[ -e "${setupVars}" ]]; then
         # update the variables in the file
@@ -1521,10 +1522,10 @@ finalExports() {
     echo -e "- subnet: ${subnet}"
     echo -e "dhcp_option:"
     echo -e "- interface: ${PIKONEK_LAN_INTERFACE}"
-    echo -e "  ipaddress: ${LAN_IPV4_ADDRESS}"
+    echo -e "  ipaddress: ${ip_v4}"
     echo -e "  option: 3"
     echo -e "hosts:"
-    echo -e "- ip: ${PIKONEK_LAN_INTERFACE}"
+    echo -e "- ip: ${ip_v4}"
     echo -e "  name: pi.konek"
     } >> "${PIKONEK_INSTALL_DIR}/configs/pikonek_dhcp_mapping.yaml"
     # echo the information to the user
@@ -1532,7 +1533,6 @@ finalExports() {
     echo "pikonek_INTERFACE=${PIKONEK_LAN_INTERFACE}"
     echo "pikonek_DNS_1=${pikonek_DNS_1}"
     echo "pikonek_DNS_2=${pikonek_DNS_2}"
-    echo "LIGHTTPD_ENABLED=${LIGHTTPD_ENABLED}"
     }>> "${setupVars}"
     chmod 644 "${setupVars}"
 
@@ -1804,7 +1804,7 @@ main() {
     # Decide what upstream DNS Servers to use
     setDNS
     # Clone/Update the repos
-    clone_or_update_repos
+    # clone_or_update_repos
     # Install the Core dependencies
     # pip_install_packages
     # On some systems, lighttpd is not enabled on first install. We need to enable it here if the user
@@ -1834,6 +1834,8 @@ main() {
         pw=$(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 8)
         # shellcheck disable=SC1091
         # TODO: Assign a password
+        # echo "WEBPASSWORD=$(HashPassword "${pw}")" >> "${setupVars}"
+        echo "WEBPASSWORD=${pw}" >> "${setupVars}"
     fi
 
     if [[ "${LIGHTTPD_ENABLED}" == true ]]; then
