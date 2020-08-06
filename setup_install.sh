@@ -1066,6 +1066,8 @@ installpikonek() {
     cp -r ${PIKONEK_LOCAL_REPO}/pikonek/** /etc/pikonek/pikonek
     # install init script to /etc/init.d
     install -m 0755 ${PIKONEK_INSTALL_DIR}/pikonek/etc/init.d/S70piknkmain /etc/init.d/S70piknkmain
+    # install the pikonek db
+    mv /etc/pikonek/pikonek/pikonek/db.wifirouter /etc/pikonek/
     # install pikonek core packages
     cp -r ${PIKONEK_LOCAL_REPO}/packages/** ${PIKONEK_INSTALL_DIR}/packages
     cp -r ${PIKONEK_LOCAL_REPO}/blocked/** ${PIKONEK_INSTALL_DIR}/blocked
@@ -1100,7 +1102,6 @@ installDefaultBlockedList() {
     curl --silent -k https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn/hosts | awk '$1 == "0.0.0.0" { print "0.0.0.0 "$2}' > ${PIKONEK_INSTALL_DIR}/blocked/porn > /dev/null 2>&1
     printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
 }
-
 
 # Install the scripts from repository to their various locations
 installScripts() {
@@ -1167,6 +1168,28 @@ installConfigs() {
     chown ${LIGHTTPD_USER}:${LIGHTTPD_GROUP} /var/cache/lighttpd/compress
     mkdir -p /var/cache/lighttpd/uploads
     chown ${LIGHTTPD_USER}:${LIGHTTPD_GROUP} /var/cache/lighttpd/uploads
+}
+
+configureDhcp() {
+    local str="Configuring dhcp and dns"
+    printf "  %b %s...\\n" "${INFO}" "${str}"
+    if pikonek -d /etc/pikonek/configs/pikonek_dhcp_mapping.yaml &> /dev/null; then
+        printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
+    else
+        printf "\\t\\t%bError: Unable to configure dhcp and dns, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"
+        return 1
+    fi
+}
+
+configureNetwork() {
+    local str="Configuring network interface"
+    printf "  %b %s...\\n" "${INFO}" "${str}"
+    if pikonek -n /etc/pikonek/configs/pikonek_net_mapping.yaml &> /dev/null; then
+        printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
+    else
+        printf "\\t\\t%bError: Unable to configure network interface, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"
+        return 1
+    fi
 }
 
 stop_service() {
@@ -1519,7 +1542,7 @@ finalExports() {
     {
     echo -e "network_config:"
     echo -e "- addresses:"
-    echo -e "  - ip_netmask:${LAN_IPV4_ADDRESS}"
+    echo -e "  - ip_netmask: ${LAN_IPV4_ADDRESS}"
     echo -e "  hotplug: true"
     echo -e "  is_wan: false"
     echo -e "  name: ${PIKONEK_LAN_INTERFACE}"
@@ -1538,10 +1561,10 @@ finalExports() {
     echo -e "- ip: ${pikonek_DNS_2}"
     echo -e "dhcp_range:"
     echo -e "- end: ${pikonek_RANGE_1}"
-    echo -e "- interface: ${PIKONEK_LAN_INTERFACE}"
-    echo -e "- start: ${pikonek_RANGE_2}"
-    echo -e "- lease_time: infinite"
-    echo -e "- subnet: ${subnet}"
+    echo -e "  interface: ${PIKONEK_LAN_INTERFACE}"
+    echo -e "  start: ${pikonek_RANGE_2}"
+    echo -e "  lease_time: infinite"
+    echo -e "  subnet: ${subnet}"
     echo -e "dhcp_option:"
     echo -e "- interface: ${PIKONEK_LAN_INTERFACE}"
     echo -e "  ipaddress: ${ip_v4}"
@@ -1549,6 +1572,8 @@ finalExports() {
     echo -e "hosts:"
     echo -e "- ip: ${ip_v4}"
     echo -e "  name: pi.konek"
+    echo -e "interface:"
+    echo -e "- name: ${PIKONEK_LAN_INTERFACE}"
     } >> "${PIKONEK_INSTALL_DIR}/configs/pikonek_dhcp_mapping.yaml"
     # echo the information to the user
     {
@@ -1844,10 +1869,12 @@ main() {
     # Install and log everything to a file
     installpikonek | tee -a /proc/$$/fd/3
     finalExports
-
+    # configure the dhcp and dns
+    configureDhcp
+    # configure the network interface
+    configureNetwork
     # Copy the temp log file into final log location for storage
     copy_to_install_log
-
     # Add password to web UI if there is none
     pw=""
     # If no password is set,
@@ -1855,8 +1882,6 @@ main() {
         # generate a random password
         pw=$(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 8)
         # shellcheck disable=SC1091
-        # TODO: Assign a password
-        # echo "WEBPASSWORD=$(HashPassword "${pw}")" >> "${setupVars}"
         pikonek -p "${pw}"
         echo "WEBPASSWORD=${pw}" >> "${setupVars}"
     fi
