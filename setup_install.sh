@@ -139,6 +139,7 @@ uninstall() {
     rm -rf /etc/dnsmasq.d/01-pikonek.conf
     rm -rf /etc/init.d/S70piknkmain
     rm -rf /etc/sudoers.d/pikonek
+    rm -rf /usr/local/bin/pikonek
     rm -rf /etc/cron.d/pikonek
     rm -rf /etc/cron.daily/pikonekupdateblockedlist
 }
@@ -1825,7 +1826,7 @@ main() {
     # Decide what upstream DNS Servers to use
     setDNS
     # Clone/Update the repos
-    # clone_or_update_repos
+    clone_or_update_repos
     # Install the Core dependencies
     # pip_install_packages
     # On some systems, lighttpd is not enabled on first install. We need to enable it here if the user
@@ -1856,6 +1857,7 @@ main() {
         # shellcheck disable=SC1091
         # TODO: Assign a password
         # echo "WEBPASSWORD=$(HashPassword "${pw}")" >> "${setupVars}"
+        pikonek -p "${pw}"
         echo "WEBPASSWORD=${pw}" >> "${setupVars}"
     fi
 
@@ -1876,7 +1878,7 @@ main() {
     if (( ${#pw} > 0 )) ; then
         # display the password
         printf "  %b Web Interface password: %b%s%b\\n" "${INFO}" "${COL_LIGHT_GREEN}" "${pw}" "${COL_NC}"
-        printf "  %b This can be changed using 'pikonek -a -p'\\n\\n" "${INFO}"
+        printf "  %b This can be changed using 'pikonek -p'\\n\\n" "${INFO}"
     fi
 
     # If the Web interface was installed,

@@ -17,5 +17,6 @@ rm -rf /etc/logrotate.d/pikonek
 rm -rf /etc/dnsmasq.d/01-pikonek.conf
 rm -rf /etc/init.d/S70piknkmain
 rm -rf /etc/sudoers.d/pikonek
+rm -rf /usr/local/bin/pikonek
 rm -rf /etc/cron.d/pikonek
 rm -rf /etc/cron.daily/pikonekupdateblockedlist
