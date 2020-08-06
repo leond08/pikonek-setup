@@ -135,6 +135,7 @@ uninstall() {
     rm -rf "${PIKONEK_INSTALL_DIR}/install.log"
     rm -rf "${PIKONEK_INSTALL_DIR}/blocked"
     rm -rf "${PIKONEK_INSTALL_DIR}"
+    rm -rf /etc/logrotate.d/pikonek
     rm -rf /etc/dnsmasq.d/01-pikonek.conf
     rm -rf /etc/init.d/S70piknkmain
     rm -rf /etc/sudoers.d/pikonek
@@ -1082,6 +1083,8 @@ installpikonek() {
     # installDefaultBlockedList
     # install web server
     installpikonekWebServer
+    # install logrotate
+    installLogrotate
     # change the user to pikonek
     chown -R pikonek:pikonek /etc/pikonek
     # Install the cron file
@@ -1416,6 +1419,21 @@ installpikonekWebServer() {
     fi
     # Set the strict permissions on the file
     chmod 0440 /etc/sudoers.d/pikonek
+    printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
+}
+
+# Install the logrotate script
+installLogrotate() {
+    local str="Installing latest logrotate script"
+    printf "\\n  %b %s..." "${INFO}" "${str}"
+    # Copy the file over from the local repo
+    install -D -m 644 -T ${PIKONEK_LOCAL_REPO}/scripts/logrotate /etc/logrotate.d/pikonek
+    logusergroup="$(stat -c '%U %G' /var/log)"
+    # If the variable has a value,
+    if [[ ! -z "${logusergroup}" ]]; then
+        #
+        sed -i "s/# su #/su ${logusergroup}/g;" /etc/logrotate.d/pikonek
+    fi
     printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
 }
 
