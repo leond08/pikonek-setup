@@ -1072,6 +1072,20 @@ installpikonek() {
     cp -r ${PIKONEK_LOCAL_REPO}/packages/** ${PIKONEK_INSTALL_DIR}/packages
     cp -r ${PIKONEK_LOCAL_REPO}/blocked/** ${PIKONEK_INSTALL_DIR}/blocked
 
+    # Check if there is /etc/sysctl.conf
+    if [ -e /etc/sysctl.conf ];
+    then
+        # Check if there is a match
+        grep -qE '#net.ipv4.ip_forward=1' /etc/sysctl.conf
+        if [ $? == 0  ]; then
+        sed -i '/#net.ipv4.ip_forward=1/a\
+        net.ipv4.ip_forward=1' /etc/sysctl.conf
+        fi
+
+    else
+        /usr/bin/install -m 0644 ${PIKONEK_LOCAL_REPO}/configs/sysctl.conf /etc/
+    fi
+
     # Install base files and web interface
     if ! installScripts; then
         printf "  %b Failure in dependent script copy function.\\n" "${CROSS}"
