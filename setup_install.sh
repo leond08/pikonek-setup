@@ -1076,14 +1076,12 @@ installpikonek() {
     if [ -e /etc/sysctl.conf ];
     then
         # Check if there is a match
-        grep -qE '#net.ipv4.ip_forward=1' /etc/sysctl.conf
-        if [ $? == 0  ]; then
-        sed -i '/#net.ipv4.ip_forward=1/a\
-        net.ipv4.ip_forward=1' /etc/sysctl.conf
+        if grep -qE '#net.ipv4.ip_forward=1' /etc/sysctl.conf; then
+            sed -i '/#net.ipv4.ip_forward=1/a\net.ipv4.ip_forward=1' /etc/sysctl.conf
         fi
 
     else
-        /usr/bin/install -m 0644 ${PIKONEK_LOCAL_REPO}/configs/sysctl.conf /etc/
+        install -m 0644 ${PIKONEK_LOCAL_REPO}/configs/sysctl.conf /etc/sysctl.conf
     fi
 
     # Install base files and web interface
@@ -1156,9 +1154,6 @@ installConfigs() {
     printf "\\n  %b Installing configs from %s...\\n" "${INFO}" "${PIKONEK_LOCAL_REPO}"
     # Make sure PiKonek's config files are in place
     version_check_dnsmasq
-    # Install list of DNS servers
-    # Format: Name;Primary IPv4;Secondary IPv4;Primary IPv6;Secondary IPv6
-    # Some values may be empty (for example: DNS servers without IPv6 support)
     install -o "${USER}" -Dm755 -d "${PIKONEK_INSTALL_DIR}/configs"
     cp -r  ${PIKONEK_LOCAL_REPO}/configs/** /etc/pikonek/configs
     # and if the Web server conf directory does not exist,
@@ -1882,6 +1877,7 @@ main() {
 
     # Install and log everything to a file
     installpikonek | tee -a /proc/$$/fd/3
+    
     finalExports
     # configure the dhcp and dns
     configureDhcp
