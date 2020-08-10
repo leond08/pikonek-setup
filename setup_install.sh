@@ -68,6 +68,21 @@ if [ -z "${USER}" ]; then
   USER="$(id -un)"
 fi
 
+is_pi () {
+  ARCH=$(dpkg --print-architecture)
+  if [ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] ; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+if is_pi ; then
+  CMDLINE=/boot/cmdline.txt
+else
+  CMDLINE=/proc/cmdline
+fi
+
 
 # Check if we are running on a real terminal and find the rows and columns
 # If there is no real terminal, we will default to 80x24
@@ -157,7 +172,7 @@ os_check() {
     # This function gets a list of supported OS versions from a TXT record at versions.PiKonek.net
     # and determines whether or not the script is running on one of those systems
     local remote_os_domain valid_os valid_version detected_os_pretty detected_os detected_version display_warning
-    remote_os_domain="Raspbian=9,10 Ubuntu=16,18,20 Debian=9,10"
+    remote_os_domain="Raspbian=10 Ubuntu=18,20 Debian=10"
     valid_os=false
     valid_version=false
     display_warning=true
@@ -295,7 +310,7 @@ if is_command apt-get ; then
     }
 
 # If apt-get is not found, check for rpm to see if it's a Red Hat family OS
-# If neither apt-get or yum/dnf package managers were found
+# If neither apt-get
 else
     # it's not an OS we can support,
     printf "  %b OS distribution not supported\\n" "${CROSS}"
@@ -589,7 +604,7 @@ setupWanInterface() {
 }
 
 count=0
-# A function to setup the wan interface
+# A function to setup the lan interface
 setupLanInterface() {
     # Turn the available interfaces into an array so it can be used with a whiptail dialog
     local interfacesArray=()
@@ -1538,6 +1553,27 @@ create_pikonek_user() {
     fi
 }
 
+# Get predictable name
+get_net_names() {
+    if grep -q "net.ifnames=0" $CMDLINE || [ "$(readlink -f /etc/systemd/network/99-default.link)" = "/dev/null" ] ; then
+        echo 0
+    else
+        echo 1
+    fi
+}
+
+do_net_names () {
+    local str="Checking for predictable names"
+    printf "%b  %b %s..." "${OVER}" "${INFO}" "${str}"
+    if [ $(get_net_names) -eq 1 ]; then
+        local str="Disabling predictable names"
+        printf "%b  %b %s..." "${OVER}" "${INFO}" "${str}"
+        ln -sf /dev/null /etc/systemd/network/99-default.link
+        printf "%b  %b %s..." "${OVER}" "${TICK}" "${str}"
+    fi
+    printf "%b  %b %s..." "${OVER}" "${TICK}" "${str}"
+ }
+
 #
 finalExports() {
     local subnet=$(ipcalc -cn $LAN_IPV4_ADDRESS | awk 'FNR == 2 {print $2}')
@@ -1883,6 +1919,8 @@ main() {
     configureDhcp
     # configure the network interface
     configureNetwork
+    # Disable predictable names
+    do_net_names
     # Copy the temp log file into final log location for storage
     copy_to_install_log
     # Add password to web UI if there is none
