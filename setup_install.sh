@@ -2000,13 +2000,14 @@ finalExports() {
     # write the wpa config
     if [ "$WLAN_AP" -eq 1 ]; then
     {
-    echo -e "mode: ${ap_mode}"
-    echo -e "ssid: ${SSID}"
-    echo -e "country: ${COUNTRY}"
+    echo -e "- mode: ${ap_mode}"
+    echo -e "  ssid: ${SSID}"
+    echo -e "  country: ${COUNTRY}"
     if [ "$psk" != "" ]; then
-    echo -e "psk: ${psk}"
+    echo -e "  psk: ${psk}"
     fi
-    echo -e "key_mgmt: ${key_mgmt}"
+    echo -e "  key_mgmt: ${key_mgmt}"
+    echo -e "  interface: ${PIKONEK_WLAN_INTERFACE}"
     } > "${PIKONEK_INSTALL_DIR}/configs/pikonek_wpa_mapping.yaml"
     fi
     # echo the information to the user
