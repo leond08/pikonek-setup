@@ -606,7 +606,7 @@ setupWlanInterface() {
             # Set up ap
             do_wifi_ap           
         else
-            printf "%b  %b %s..." "${OVER}" "${INFO}" "${str}"
+            printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
         fi
 
     else
@@ -1917,8 +1917,10 @@ do_net_names () {
 finalExports() {
     local lan_subnet=$(ipcalc -cn $LAN_IPV4_ADDRESS | awk 'FNR == 2 {print $2}')
     local lan_ip_v4=$(ipcalc -cn $LAN_IPV4_ADDRESS | awk 'FNR == 1 {print $2}')
+    if [ "$WLAN_AP" -eq 1 ]; then
     local wlan_subnet=$(ipcalc -cn $WLAN_IPV4_ADDRESS | awk 'FNR == 2 {print $2}')
     local wlan_ip_v4=$(ipcalc -cn $WLAN_IPV4_ADDRESS | awk 'FNR == 1 {print $2}')
+    fi
     # Set the pikonek_net_mapping.yaml
     {
     echo -e "network_config:"
@@ -2339,18 +2341,13 @@ main() {
     # Start services
 
     displayFinalMessage "${pw}"
-
-    # If the Web interface was installed,
-    # If there is a password,
     if (( ${#pw} > 0 )) ; then
         # display the password
         printf "  %b Web Interface password: %b%s%b\\n" "${INFO}" "${COL_LIGHT_GREEN}" "${pw}" "${COL_NC}"
         printf "  %b This can be changed using 'pikonek -p'\\n\\n" "${INFO}"
     fi
 
-    # If the Web interface was installed,
     printf "  %b View the web interface at http://pi.konek/ or http://%s/\\n\\n" "${INFO}" "${LAN_IPV4_ADDRESS%/*}"
-    # Explain to the user how to use PiKonek as their DNS server
     printf "  %b Please reboot your system.\\n" "${INFO}"
     INSTALL_TYPE="Installation"
 
