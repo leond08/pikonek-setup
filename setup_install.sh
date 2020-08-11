@@ -1931,15 +1931,21 @@ finalExports() {
         echo -e "  type: interface"
         echo -e "  use_dhcp: false"
     fi
+    if [ "$PIKONEK_WAN_DHCP_INTERFACE" = false ]; then
+    echo -e "- addresses:"
+    echo -e "  - ip_netmask: ${WAN_IPV4_ADDRESS}"
+    echo -e "  hotplug: true"
+    echo -e "  is_wan: true"
+    echo -e "  name: ${PIKONEK_WAN_INTERFACE}"
+    echo -e "  type: interface"
+    echo -e "  use_dhcp: ${PIKONEK_WAN_DHCP_INTERFACE}"
+    else
     echo -e "- hotplug: true"
     echo -e "  is_wan: true"
     echo -e "  name: ${PIKONEK_WAN_INTERFACE}"
     echo -e "  type: interface"
-    if [ "$PIKONEK_WAN_DHCP_INTERFACE" = false ]; then
-        echo -e "- addresses:"
-        echo -e "  - ip_netmask: ${WAN_IPV4_ADDRESS}"
-    fi
     echo -e "  use_dhcp: ${PIKONEK_WAN_DHCP_INTERFACE}"
+    fi
     } > "${PIKONEK_INSTALL_DIR}/configs/pikonek_net_mapping.yaml"
     # set the pikonek_dhcp_mapping.yaml
     {
@@ -1986,11 +1992,12 @@ finalExports() {
     {
     echo -e "mode: ${ap_mode}"
     echo -e "ssid: ${SSID}"
+    echo -e "country: ${COUNTRY}"
     if [ "$psk" != "" ]; then
     echo -e "psk: ${psk}"
     fi
     echo -e "key_mgmt: ${key_mgmt}"
-    } >> "${PIKONEK_INSTALL_DIR}/configs/pikonek_wpa_mapping.yaml"
+    } > "${PIKONEK_INSTALL_DIR}/configs/pikonek_wpa_mapping.yaml"
     fi
     # echo the information to the user
     {
@@ -2299,7 +2306,7 @@ main() {
     # configure wireless access point
     if [ "$WLAN_AP" -eq 1 ]; then
         configureWirelessAP
-    if
+    fi
     # Copy the temp log file into final log location for storage
     copy_to_install_log
     # Add password to web UI if there is none
