@@ -502,10 +502,10 @@ get_available_wlan_interfaces() {
 # A function for displaying the dialogs the user sees when first running the installer
 welcomeDialogs() {
     # Display the welcome dialog using an appropriately sized window via the calculation conducted earlier in the script
-    whiptail --msgbox --backtitle "Welcome" --title "PiKonek automated installer" "\\n\\nThis installer will transform your device into a PisoWifi/Firewall Management!" "${r}" "${c}"
+    whiptail --msgbox --backtitle "Welcome" --title "PiKonek automated installer" "\\n\\nWelcome to PiKonek a PisoWifi and Firewall Management!" "${r}" "${c}"
 
     # Explain the need for a static address
-    whiptail --msgbox --backtitle "Initiating network interface" --title "Static IP Needed" "\\n\\nThe PiKonek is a SERVER so it needs a STATIC IP ADDRESS to function properly." "${r}" "${c}"
+    whiptail --msgbox --backtitle "Welcome" --title "PiKonek automated installer" "\\n\\nThe PiKonek is a SERVER so it needs an internet and STATIC IP ADDRESS to function properly." "${r}" "${c}"
 }
 
 # We need to make sure there is enough space before installing, so there is a function to check this
@@ -671,18 +671,26 @@ do_wifi_ap() {
 
     SSID="$1"
     while [ -z "$SSID" ]; do
-        SSID=$(whiptail --inputbox "Please enter SSID" 20 60 3>&1 1>&2 2>&3)
+        SSID=$(whiptail --inputbox "Please enter SSID" "${r}" "${c}" 3>&1 1>&2 2>&3)
         if [ $? -ne 0 ]; then
             return 0
         elif [ -z "$SSID" ]; then
-            whiptail --msgbox "SSID cannot be empty. Please try again." 20 60
+            whiptail --msgbox "SSID cannot be empty. Please try again." "${r}" "${c}"
         fi
     done
 
-    PASSPHRASE="$2"
-    PASSPHRASE=$(whiptail --passwordbox "Please enter passphrase. Leave it empty if none." 20 60 3>&1 1>&2 2>&3)
-    if [ $? -ne 0 ]; then
-        return 0
+    if whiptail --yesno "Do you want to enable passphrase?" "${r}" "${c}"; then
+        PASSPHRASE=""
+        local pass_length=$(expr length "$PASSPHRASE")
+        while [ "$pass_length" -lt 8 ]; do
+            PASSPHRASE=$(whiptail --passwordbox "Please enter passphrase. Must be min of 8 characters in length." "${r}" "${c}" 3>&1 1>&2 2>&3)
+            pass_length=$(expr length "$PASSPHRASE")
+            if [ $? -ne 0 ]; then
+                return 0
+            elif [ -z "$PASSPHRASE" ]; then
+                whiptail --msgbox "PASSPHRASE cannot be empty. Please try again." "${r}" "${c}"
+            fi
+        done
     fi
 
     # Escape special characters for embedding in regex below
