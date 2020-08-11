@@ -478,6 +478,7 @@ find_IPv4_information() {
     # Get the default gateway IPv4 address (the way to reach the Internet)
     # shellcheck disable=SC2059,SC2086
     printf -v IPv4gw "$(printf ${route#*via })"
+    printf -v IPv4interface "$(printf ${route#*dev })"
 
     if ! valid_ip "${IPv4bare}" ; then
         IPv4bare="127.0.0.1"
@@ -490,9 +491,12 @@ find_IPv4_information() {
 # Get available interfaces that are UP
 get_available_interfaces() {
     # There may be more than one so it's all stored in a variable
-    # availableInterfaces=$(ip --oneline link show up | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1)
-    availableInterfaces="$(ip --oneline link show up | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1)
-    eth1"
+    availableInterfaces="$(ip --oneline link show up | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1 | grep eth)"
+}
+
+get_available_wlan_interfaces() {
+    # There may be more than one so it's all stored in a variable
+    availableWlanInterfaces="$(ip --oneline link show up | grep wl | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1)"
 }
 
 # A function for displaying the dialogs the user sees when first running the installer
@@ -548,7 +552,219 @@ verifyFreeDiskSpace() {
 }
 
 # A function to setup the wan interface
+setupWlanInterface() {
+    WLAN_AP=0
+    local countIface=0
+    # Turn the available interfaces into an array so it can be used with a whiptail dialog
+    local interfacesArray=()
+    # Number of available interfaces
+    local interfaceCount
+    # Whiptail variable storage
+    local chooseInterfaceCmd
+    # Temporary Whiptail options storage
+    local chooseInterfaceOptions
+    # Loop sentinel variable
+    local firstLoop=1
+    local str="Checking for available wireless interface"
+    printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
+    # Find out how many interfaces are available to choose from
+    interfaceCount=$(wc -l <<< "${availableWlanInterfaces}")
+
+    # If there is one interface,
+    if [[ "${interfaceCount}" -ge 1 ]]; then
+        # While reading through the available interfaces
+        if whiptail --backtitle "Setting up wireless interface" --title "Wireless Access Point Configuration" --yesno "Do you want to enable wireless access point?" "${r}" "${c}"; then
+            while read -r line; do
+                # use a variable to set the option as OFF to begin with
+                mode="OFF"
+                # If it's the first loop,
+                if [[ "${firstLoop}" -eq 1 ]]; then
+                    # set this as the interface to use (ON)
+                    firstLoop=0
+                    mode="ON"
+                fi
+                # Put all these interfaces into an array
+                interfacesArray+=("${line}" "available" "${mode}")
+            # Feed the available interfaces into this while loop
+            done <<< "${availableWlanInterfaces}"
+            # The whiptail command that will be run, stored in a variable
+            chooseInterfaceCmd=(whiptail --separate-output --radiolist "Choose the WLAN Interface (press space to toggle selection)" "${r}" "${c}" "${interfaceCount}")
+            # Now run the command using the interfaces saved into the array
+            chooseInterfaceOptions=$("${chooseInterfaceCmd[@]}" "${interfacesArray[@]}" 2>&1 >/dev/tty) || \
+            # If the user chooses Cancel, exit
+            { printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
+            # For each interface
+            for desiredInterface in ${chooseInterfaceOptions}; do
+                # Set the one the user selected as the interface to use
+                PIKONEK_WLAN_INTERFACE=${desiredInterface}
+                # and show this information to the user
+                printf "  %b Using WLAN interface: %s\\n" "${INFO}" "${PIKONEK_WLAN_INTERFACE}"
+            done
+            WLAN_AP=1
+            # set up ip
+            getStaticIPv4WlanSettings
+            # Set up ap
+            do_wifi_ap           
+        else
+            printf "%b  %b %s..." "${OVER}" "${INFO}" "${str}"
+        fi
+
+    else
+        str="No available wireless interface"
+        printf "%b  %b %s...\\" "${OVER}" "${INFO}" "${str}"
+    fi
+}
+
+configureWirelessAP() {
+    local str="Configuring wireless access point configuration"
+    printf "  %b %s...\\n" "${INFO}" "${str}"
+    if pikonek -w /etc/pikonek/configs/pikonek_wpa_mapping.yaml &> /dev/null; then
+        printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
+    else
+        printf "\\t\\t%bError: Unable to configure wireless access point, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"
+        return 1
+    fi
+}
+
+get_wifi_country() {
+    CODE=${1:-0}
+    if ! wpa_cli -i "$PIKONEK_WLAN_INTERFACE" status > /dev/null 2>&1; then
+        whiptail --msgbox "Could not communicate with wpa_supplicant" 20 60
+        return 1
+    fi
+    wpa_cli -i "$PIKONEK_WLAN_INTERFACE" save_config > /dev/null 2>&1
+    COUNTRY="$(wpa_cli -i "$PIKONEK_WLAN_INTERFACE" get country)"
+    if [ "$COUNTRY" = "FAIL" ]; then
+        return 1
+    fi
+
+    if [ $CODE = 0 ]; then
+        echo "$COUNTRY"
+    fi
+
+    return 0
+}
+
+list_wlan_interfaces() {
+  for dir in /sys/class/net/*/wireless; do
+    if [ -d "$dir" ]; then
+      basename "$(dirname "$dir")"
+    fi
+  done
+}
+
+do_wifi_ap() {
+    ap_mode=2
+    psk=""
+    IFACE_LIST="$(list_wlan_interfaces)"
+    if ! wpa_cli -i "$PIKONEK_WLAN_INTERFACE" status > /dev/null 2>&1; then
+        whiptail --msgbox "Could not communicate with wpa_supplicant" 20 60
+        return 1
+    fi
+
+    # Install wpa_supplicant.conf       
+    install -m 0644 ${PIKONEK_LOCAL_REPO}/configs/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf
+
+    if [ -z "$(get_wifi_country)" ]; then
+        do_wifi_country
+    fi
+
+    SSID="$1"
+    while [ -z "$SSID" ]; do
+        SSID=$(whiptail --inputbox "Please enter SSID" 20 60 3>&1 1>&2 2>&3)
+        if [ $? -ne 0 ]; then
+            return 0
+        elif [ -z "$SSID" ]; then
+            whiptail --msgbox "SSID cannot be empty. Please try again." 20 60
+        fi
+    done
+
+    PASSPHRASE="$2"
+    PASSPHRASE=$(whiptail --passwordbox "Please enter passphrase. Leave it empty if none." 20 60 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        return 0
+    fi
+
+    # Escape special characters for embedding in regex below
+    local ssid="$(echo "$SSID" \
+    | sed 's;\\;\\\\;g' \
+    | sed -e 's;\.;\\\.;g' \
+            -e 's;\*;\\\*;g' \
+            -e 's;\+;\\\+;g' \
+            -e 's;\?;\\\?;g' \
+            -e 's;\^;\\\^;g' \
+            -e 's;\$;\\\$;g' \
+            -e 's;\/;\\\/;g' \
+            -e 's;\[;\\\[;g' \
+            -e 's;\];\\\];g' \
+            -e 's;{;\\{;g'   \
+            -e 's;};\\};g'   \
+            -e 's;(;\\(;g'   \
+            -e 's;);\\);g'   \
+            -e 's;";\\\\\";g')"
+    
+    # ID="$(wpa_cli -i "$PIKONEK_WLAN_INTERFACE" add_network)"
+    # wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set_network "$ID" ssid "\"$SSID\"" 2>&1 | grep -q "OK"
+    # RET=$((RET + $?))
+    # # set the mode to 2 -- for ap
+    # wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set_network "$ID" mode 2 2>&1 | grep -q "OK"
+    # RET=$((RET + $?))
+
+    if [ -z "$PASSPHRASE" ]; then
+        # wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set_network "$ID" key_mgmt NONE 2>&1 | grep -q "OK"
+        # RET=$((RET + $?))
+        key_mgmt="NONE"
+    else
+        # wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set_network "$ID" key_mgmt WPA-PSK 2>&1 | grep -q "OK"
+        # wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set_network "$ID" psk "\"$PASSPHRASE\"" 2>&1 | grep -q "OK"
+        # RET=$((RET + $?))
+        psk="$PASSPHRASE"
+        key_mgmt="WPA-PSK"
+    fi
+
+    # if [ $RET -eq 0 ]; then
+    #     wpa_cli -i "$PIKONEK_WLAN_INTERFACE" enable_network "$ID" > /dev/null 2>&1
+    # else
+    #     wpa_cli -i "$PIKONEK_WLAN_INTERFACE" remove_network "$ID" > /dev/null 2>&1
+    #     whiptail --msgbox "Failed to set SSID or passphrase" 20 60
+    # fi
+    # wpa_cli -i "$PIKONEK_WLAN_INTERFACE" save_config > /dev/null 2>&1
+
+    # echo "$IFACE_LIST" | while read IFACE; do
+    #     wpa_cli -i "$IFACE" reconfigure > /dev/null 2>&1
+    # done
+
+    # return $RET
+}
+
+
+do_wifi_country() {
+    if ! wpa_cli -i "$PIKONEK_WLAN_INTERFACE" status > /dev/null 2>&1; then
+        whiptail --msgbox "Could not communicate with wpa_supplicant" 20 60
+        return 1
+    fi
+
+    oIFS="$IFS"
+    IFS="/"
+    value=$(cat /usr/share/zoneinfo/iso3166.tab | tail -n +26 | tr '\t' '/' | tr '\n' '/')
+    COUNTRY=$(whiptail --menu "Select the country in which the PiKonek is to be used" 20 60 10 ${value} 3>&1 1>&2 2>&3)
+    IFS=$oIFS
+    COUNTRY=$1
+    true
+
+    if [ $? -eq 0 ];then
+        wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set country "$COUNTRY"
+        wpa_cli -i "$PIKONEK_WLAN_INTERFACE" save_config > /dev/null 2>&1
+    fi
+
+    whiptail --msgbox "Wireless LAN country set to $COUNTRY" 20 60 1
+    str="Wireless LAN country set to $COUNTRY"
+    printf "%b  %b %s...\\" "${OVER}" "${INFO}" "${str}"
+}
+
+# A function to setup the wan interface
 setupWanInterface() {
+    local countIface=0
     # Turn the available interfaces into an array so it can be used with a whiptail dialog
     local interfacesArray=()
     # Number of available interfaces
@@ -565,39 +781,39 @@ setupWanInterface() {
 
     # If there is one interface,
     if [[ "${interfaceCount}" -eq 1 ]]; then
+        countIface=1
         # Set it as the interface to use since there is no other option
-        PIKONEK_WAN_INTERFACE="${availableInterfaces}"
-        printf "  %b Using WAN interface: %s\\n" "${INFO}" "${PIKONEK_WAN_INTERFACE}"
-    # Otherwise,
-    else
-        # While reading through the available interfaces
-        while read -r line; do
-            # use a variable to set the option as OFF to begin with
-            mode="OFF"
-            # If it's the first loop,
-            if [[ "${firstLoop}" -eq 1 ]]; then
-                # set this as the interface to use (ON)
-                firstLoop=0
-                mode="ON"
-            fi
-            # Put all these interfaces into an array
-            interfacesArray+=("${line}" "available" "${mode}")
-        # Feed the available interfaces into this while loop
-        done <<< "${availableInterfaces}"
-        # The whiptail command that will be run, stored in a variable
-        chooseInterfaceCmd=(whiptail --separate-output --radiolist "Choose the WAN Interface (press space to toggle selection)" "${r}" "${c}" "${interfaceCount}")
-        # Now run the command using the interfaces saved into the array
-        chooseInterfaceOptions=$("${chooseInterfaceCmd[@]}" "${interfacesArray[@]}" 2>&1 >/dev/tty) || \
-        # If the user chooses Cancel, exit
-        { printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
-        # For each interface
-        for desiredInterface in ${chooseInterfaceOptions}; do
-            # Set the one the user selected as the interface to use
-            PIKONEK_WAN_INTERFACE=${desiredInterface}
-            # and show this information to the user
-            printf "  %b Using WAN interface: %s\\n" "${INFO}" "${PIKONEK_WAN_INTERFACE}"
-        done
+        # PIKONEK_WAN_INTERFACE="${availableInterfaces}"
+        # printf "  %b Using WAN interface: %s\\n" "${INFO}" "${PIKONEK_WAN_INTERFACE}"
     fi
+    # Otherwise,
+    # While reading through the available interfaces
+    while read -r line; do
+        # use a variable to set the option as OFF to begin with
+        mode="OFF"
+        # If it's the first loop,
+        if [[ "${firstLoop}" -eq 1 ]]; then
+            # set this as the interface to use (ON)
+            firstLoop=0
+            mode="ON"
+        fi
+        # Put all these interfaces into an array
+        interfacesArray+=("${line}" "available" "${mode}")
+    # Feed the available interfaces into this while loop
+    done <<< "${availableInterfaces}"
+    # The whiptail command that will be run, stored in a variable
+    chooseInterfaceCmd=(whiptail --separate-output --radiolist "Choose the WAN Interface (press space to toggle selection)" "${r}" "${c}" "${interfaceCount}")
+    # Now run the command using the interfaces saved into the array
+    chooseInterfaceOptions=$("${chooseInterfaceCmd[@]}" "${interfacesArray[@]}" 2>&1 >/dev/tty) || \
+    # If the user chooses Cancel, exit
+    { printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
+    # For each interface
+    for desiredInterface in ${chooseInterfaceOptions}; do
+        # Set the one the user selected as the interface to use
+        PIKONEK_WAN_INTERFACE=${desiredInterface}
+        # and show this information to the user
+        printf "  %b Using WAN interface: %s\\n" "${INFO}" "${PIKONEK_WAN_INTERFACE}"
+    done
 
     find_IPv4_information
     getStaticIPv4WanSettings
@@ -606,6 +822,7 @@ setupWanInterface() {
 count=0
 # A function to setup the lan interface
 setupLanInterface() {
+    local countIface=0
     # Turn the available interfaces into an array so it can be used with a whiptail dialog
     local interfacesArray=()
     # Number of available interfaces
@@ -623,43 +840,51 @@ setupLanInterface() {
     # If there is one interface,
     if [[ "${interfaceCount}" -eq 1 ]]; then
         # Set it as the interface to use since there is no other option
-        PIKONEK_LAN_INTERFACE="${availableInterfaces}"
-        printf "  %b Using LAN interface: %s\\n" "${INFO}" "${PIKONEK_LAN_INTERFACE}"
+        countIface=1
+        interfaceCount=2
+        # printf "  %b Using LAN interface: %s\\n" "${INFO}" "${PIKONEK_LAN_INTERFACE}"
+    fi
     # Otherwise,
-    else
-        # While reading through the available interfaces
-        mode="OFF"
-        while read -r line; do
-            # use a variable to set the option as OFF to begin with
+    # While reading through the available interfaces
+    mode="OFF"
+    while read -r line; do
+        # use a variable to set the option as OFF to begin with
+        # Put all these interfaces into an array
+
+        if [ "$countIface" -eq 1 ]; then
             # Put all these interfaces into an array
+            interfacesArray+=("eth1" "available" "ON")
+        else
             if [ "$line" != "$PIKONEK_WAN_INTERFACE" ]; then
                 if [ $mode == "OFF" ]; then
                     mode="ON"
                     count=$((count+1))
                 fi
                 # If it equals 1,
-                if [[ "${count}" == 1 ]]; then
-                    #
-                    mode="OFF"
-                fi
+                # if [[ "${count}" == 1 ]]; then
+                #     #
+                #     mode="OFF"
+                # fi
+
                 interfacesArray+=("${line}" "available" "${mode}")
             fi
-        # Feed the available interfaces into this while loop
-        done <<< "${availableInterfaces}"
-        # The whiptail command that will be run, stored in a variable
-        chooseInterfaceCmd=(whiptail --separate-output --radiolist "Choose the LAN Interface (press space to toggle selection)" "${r}" "${c}" "${interfaceCount}")
-        # Now run the command using the interfaces saved into the array
-        chooseInterfaceOptions=$("${chooseInterfaceCmd[@]}" "${interfacesArray[@]}" 2>&1 >/dev/tty) || \
-        # If the user chooses Cancel, exit
-        { printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
-        # For each interface
-        for desiredInterface in ${chooseInterfaceOptions}; do
-            # Set the one the user selected as the interface to use
-            PIKONEK_LAN_INTERFACE=${desiredInterface}
-            # and show this information to the user
-            printf "  %b Using LAN interface: %s\\n" "${INFO}" "${PIKONEK_LAN_INTERFACE}"
-        done
-    fi
+        fi
+
+    # Feed the available interfaces into this while loop
+    done <<< "${availableInterfaces}"
+    # The whiptail command that will be run, stored in a variable
+    chooseInterfaceCmd=(whiptail --separate-output --radiolist "Choose the LAN Interface (press space to toggle selection)" "${r}" "${c}" "${interfaceCount}")
+    # Now run the command using the interfaces saved into the array
+    chooseInterfaceOptions=$("${chooseInterfaceCmd[@]}" "${interfacesArray[@]}" 2>&1 >/dev/tty) || \
+    # If the user chooses Cancel, exit
+    { printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
+    # For each interface
+    for desiredInterface in ${chooseInterfaceOptions}; do
+        # Set the one the user selected as the interface to use
+        PIKONEK_LAN_INTERFACE=${desiredInterface}
+        # and show this information to the user
+        printf "  %b Using LAN interface: %s\\n" "${INFO}" "${PIKONEK_LAN_INTERFACE}"
+    done
 
     getStaticIPv4LanSettings
 }
@@ -669,32 +894,61 @@ getStaticIPv4WanSettings() {
     local ipSettingsCorrect
     # Ask if the user wants to use DHCP settings as their static IP
     # This is useful for users that are using DHCP reservations; then we can just use the information gathered via our functions
-    if whiptail --backtitle "Calibrating network interface" --title "WAN Static IP Address" --yesno "Do you want to use your current network settings as a static address for WAN Interface?
-        IP address:    ${IPV4_ADDRESS}
-        Gateway:       ${IPv4gw}" "${r}" "${c}"; then
-    PIKONEK_WAN_DHCP_INTERFACE=true
+    if whiptail --backtitle "Calibrating network interface" --title "WAN IP Address Assignment" --yesno "Do you want to use DHCP to assign ip address for WAN Interface?" "${r}" "${c}"; then
+        PIKONEK_WAN_DHCP_INTERFACE=true
     else
+    # Otherwise, we need to ask the user to input thesir deired settings.
+    # Start by getting the IPv4 address (pre-filling it with info gathered from DHCP)
+    # Start a loop to let the user enter their information with the chance to go back and edit it if necessary
+        until [[ "${ipSettingsCorrect}" = True ]]; do
+            # Ask for the IPv4 address
+            WAN_IPV4_ADDRESS=$(whiptail --backtitle "Calibrating network interface" --title "IPv4 address" --inputbox "Enter your desired IPv4 address" "${r}" "${c}" "${IPV4_ADDRESS}" 3>&1 1>&2 2>&3) || \
+            # Canceling IPv4 settings window
+            { ipSettingsCorrect=False; echo -e "  ${COL_LIGHT_RED}Cancel was selected, exiting installer${COL_NC}"; exit 1; }
+            printf "  %b Your static IPv4 address: %s\\n" "${INFO}" "${IPV4_ADDRESS}"
+
+            # Ask for the gateway
+            WAN_IPv4gw=$(whiptail --backtitle "Calibrating network interface" --title "IPv4 gateway (router)" --inputbox "Enter your desired IPv4 default gateway" "${r}" "${c}" "${IPv4gw}" 3>&1 1>&2 2>&3) || \
+            # Canceling gateway settings window
+            { ipSettingsCorrect=False; echo -e "  ${COL_LIGHT_RED}Cancel was selected, exiting installer${COL_NC}"; exit 1; }
+            printf "  %b Your static IPv4 gateway: %s\\n" "${INFO}" "${IPv4gw}"
+            PIKONEK_WAN_DHCP_INTERFACE=false
+            # Give the user a chance to review their settings before moving on
+            if whiptail --backtitle "Calibrating network interface" --title "Static IP Address" --yesno "Are these settings correct?
+                IP address: ${WAN_IPV4_ADDRESS}
+                Gateway:    ${WAN_IPv4gw}" "${r}" "${c}"; then
+                    # After that's done, the loop ends and we move on
+                    ipSettingsCorrect=True
+            else
+                # If the settings are wrong, the loop continues
+                ipSettingsCorrect=False
+            fi
+        done
+    fi
+}
+
+getStaticIPv4WlanSettings() {
+    # Local, named variables
+    local ipSettingsCorrect
+    local ipRangeSettingsCorrect
+    PIKONEK_WLAN_DHCP_INTERFACE=false
+    WLAN_IPV4_ADDRESS="192.168.0.1/24"
+    # Ask if the user wants to use DHCP settings as their static IP
+    # This is useful for users that are using DHCP reservations; then we can just use the information gathered via our functions
+    whiptail --title "WLAN Static IP Address" --msgbox "Configure IPv4 Static Address for WLAN Interface." "${r}" "${c}"
     # Otherwise, we need to ask the user to input their desired settings.
     # Start by getting the IPv4 address (pre-filling it with info gathered from DHCP)
     # Start a loop to let the user enter their information with the chance to go back and edit it if necessary
     until [[ "${ipSettingsCorrect}" = True ]]; do
-
         # Ask for the IPv4 address
-        IPV4_ADDRESS=$(whiptail --backtitle "Calibrating network interface" --title "IPv4 address" --inputbox "Enter your desired IPv4 address" "${r}" "${c}" "${IPV4_ADDRESS}" 3>&1 1>&2 2>&3) || \
+        WLAN_IPV4_ADDRESS=$(whiptail --backtitle "Calibrating network interface" --title "IPv4 address" --inputbox "Enter your desired IPv4 address ie. 192.168.0.1/24" "${r}" "${c}" "${WLAN_IPV4_ADDRESS}" 3>&1 1>&2 2>&3) || \
         # Canceling IPv4 settings window
         { ipSettingsCorrect=False; echo -e "  ${COL_LIGHT_RED}Cancel was selected, exiting installer${COL_NC}"; exit 1; }
-        printf "  %b Your static IPv4 address: %s\\n" "${INFO}" "${IPV4_ADDRESS}"
-
-        # Ask for the gateway
-        IPv4gw=$(whiptail --backtitle "Calibrating network interface" --title "IPv4 gateway (router)" --inputbox "Enter your desired IPv4 default gateway" "${r}" "${c}" "${IPv4gw}" 3>&1 1>&2 2>&3) || \
-        # Canceling gateway settings window
-        { ipSettingsCorrect=False; echo -e "  ${COL_LIGHT_RED}Cancel was selected, exiting installer${COL_NC}"; exit 1; }
-        printf "  %b Your static IPv4 gateway: %s\\n" "${INFO}" "${IPv4gw}"
-        PIKONEK_WAN_DHCP_INTERFACE=false
+        printf "  %b Your WLAN static IPv4 address: %s\\n" "${INFO}" "${WLAN_IPV4_ADDRESS}"
+        PIKONEK_WLAN_DHCP_INTERFACE=false
         # Give the user a chance to review their settings before moving on
         if whiptail --backtitle "Calibrating network interface" --title "Static IP Address" --yesno "Are these settings correct?
-            IP address: ${IPV4_ADDRESS}
-            Gateway:    ${IPv4gw}" "${r}" "${c}"; then
+            IP address: ${WLAN_IPV4_ADDRESS}" "${r}" "${c}"; then
                 # After that's done, the loop ends and we move on
                 ipSettingsCorrect=True
         else
@@ -702,8 +956,69 @@ getStaticIPv4WanSettings() {
             ipSettingsCorrect=False
         fi
     done
-    # End the if statement for DHCP vs. static
-    fi
+    # Set dhcp range
+    until [[ "${ipRangeSettingsCorrect}" = True ]]; do
+        #
+        strInvalid="Invalid"
+        # If the first
+        if [[ ! "${wpikonek_RANGE_1}" ]]; then
+            # and second upstream servers do not exist
+            if [[ ! "${wpikonek_RANGE_2}" ]]; then
+                prePopulate=""
+            # Otherwise,
+            else
+                prePopulate=", ${wpikonek_RANGE_2}"
+            fi
+        elif  [[ "${wpikonek_RANGE_1}" ]] && [[ ! "${wpikonek_RANGE_2}" ]]; then
+            prePopulate="${wpikonek_RANGE_1}"
+        elif [[ "${wpikonek_RANGE_1}" ]] && [[ "${wpikonek_RANGE_2}" ]]; then
+            prePopulate="${wpikonek_RANGE_1}, ${wpikonek_RANGE_2}"
+        fi
+
+        # Dialog for the user to enter custom upstream servers
+        wpikonekRange=$(whiptail --backtitle "Specify the dhcp range"  --inputbox "Enter your desired dhcp range, separated by a comma.\\n\\nFor example '192.168.0.100, 192.168.0.200'" "${r}" "${c}" "${prePopulate}" 3>&1 1>&2 2>&3) || \
+        { printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
+        # Clean user input and replace whitespace with comma.
+        wpikonekRange=$(sed 's/[, \t]\+/,/g' <<< "${wpikonekRange}")
+
+        printf -v wpikonek_RANGE_1 "%s" "${wpikonekRange%%,*}"
+        printf -v wpikonek_RANGE_2 "%s" "${wpikonekRange##*,}"
+
+        # If the IP is valid,
+        if ! valid_ip "${wpikonek_RANGE_1}" || [[ ! "${wpikonek_RANGE_1}" ]]; then
+            # store it in the variable so we can use it
+            wpikonek_RANGE_1=${strInvalid}
+        fi
+        # Do the same for the secondary server
+        if ! valid_ip "${wpikonek_RANGE_2}" && [[ "${wpikonek_RANGE_2}" ]]; then
+            wpikonek_RANGE_2=${strInvalid}
+        fi
+        # If either of the IP Address are invalid,
+        if [[ "${wpikonek_RANGE_1}" == "${strInvalid}" ]] || [[ "${wpikonek_RANGE_2}" == "${strInvalid}" ]]; then
+            # explain this to the user
+            whiptail --msgbox --backtitle "Invalid IP" --title "Invalid IP" "One or both entered IP addresses were invalid. Please try again.\\n\\n    IP Address 1:   $wpikonek_RANGE_2\\n    IP Address 2:   ${wpikonek_RANGE_2}" ${r} ${c}
+            # and set the variables back to nothing
+            if [[ "${wpikonek_RANGE_1}" == "${strInvalid}" ]]; then
+                wpikonek_RANGE_1=""
+            fi
+            if [[ "${wpikonek_RANGE_2}" == "${strInvalid}" ]]; then
+                wpikonek_RANGE_2=""
+            fi
+            # Since the settings will not work, stay in the loop
+            ipRangeSettingsCorrect=False
+        # Otherwise,
+        else
+            # Show the settings
+            if (whiptail --backtitle "Specify DHCP Range(s)" --title "DHCP Range(s)" --yesno "Are these settings correct?\\n    IP Address 1:   $wpikonek_RANGE_1\\n    IP Address 2:   ${wpikonek_RANGE_2}" "${r}" "${c}"); then
+                # and break from the loop since the servers are valid
+                ipRangeSettingsCorrect=True
+            # Otherwise,
+            else
+                # If the settings are wrong, the loop continues
+                ipRangeSettingsCorrect=False
+            fi
+        fi
+    done
 }
 
 getStaticIPv4LanSettings() {
@@ -1563,26 +1878,39 @@ get_net_names() {
 }
 
 do_net_names () {
+    ASK_REBOOT=0
     local str="Checking for predictable names"
     printf "%b  %b %s..." "${OVER}" "${INFO}" "${str}"
     if [ $(get_net_names) -eq 1 ]; then
-        local str="Disabling predictable names"
-        printf "%b  %b %s..." "${OVER}" "${INFO}" "${str}"
+        str="Disabling predictable names"
+        printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
         ln -sf /dev/null /etc/systemd/network/99-default.link
-        printf "%b  %b %s..." "${OVER}" "${TICK}" "${str}"
+        printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
+        echo "ASK_REBOOT=1" > /tmp/setUpVars.conf
+        ASK_REBOOT=1
     fi
-    printf "%b  %b %s..." "${OVER}" "${TICK}" "${str}"
+    printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
+    if [ "$ASK_REBOOT" -eq 1 ]; then
+        str="Your system needs to reboot to continue. Please reboot your system to continue the installation."
+        printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
+        exit 1
+    fi
+
+    # Add a temp file to /tmp this will automatically wipe after reboot
+    if [[ -e "/tmp/setUpVars.conf" ]]; then
+        str="Your system needs to reboot to continue. Please reboot your system to continue the installation."
+        printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
+        exit 1
+    fi
  }
 
-#
+
+# Final export of variables
 finalExports() {
-    local subnet=$(ipcalc -cn $LAN_IPV4_ADDRESS | awk 'FNR == 2 {print $2}')
-    local ip_v4=$(ipcalc -cn 10.0.0.0/24 | awk 'FNR == 1 {print $2}')
-    # If the setup variable file exists,
-    if [[ -e "${setupVars}" ]]; then
-        # update the variables in the file
-        sed -i.update.bak '/pikonek_INTERFACE/d;/IPV4_ADDRESS/d;/IPV6_ADDRESS/d;/pikonek_DNS_1/d;/pikonek_DNS_2/d;/QUERY_LOGGING/d;/INSTALL_WEB_SERVER/d;/INSTALL_WEB_INTERFACE/d;/LIGHTTPD_ENABLED/d;' "${setupVars}"
-    fi
+    local lan_subnet=$(ipcalc -cn $LAN_IPV4_ADDRESS | awk 'FNR == 2 {print $2}')
+    local lan_ip_v4=$(ipcalc -cn $LAN_IPV4_ADDRESS | awk 'FNR == 1 {print $2}')
+    local wlan_subnet=$(ipcalc -cn $WLAN_IPV4_ADDRESS | awk 'FNR == 2 {print $2}')
+    local wlan_ip_v4=$(ipcalc -cn $WLAN_IPV4_ADDRESS | awk 'FNR == 1 {print $2}')
     # Set the pikonek_net_mapping.yaml
     {
     echo -e "network_config:"
@@ -1592,11 +1920,25 @@ finalExports() {
     echo -e "  is_wan: false"
     echo -e "  name: ${PIKONEK_LAN_INTERFACE}"
     echo -e "  type: interface"
-    echo -e "  use_dhcp: ${PIKONEK_LAN_DHCP_INTERFACE}"
+    echo -e "  use_dhcp: false"
+    if [ "$WLAN_AP" -eq 1 ]; then
+        echo -e "- addresses:"
+        echo -e "  - ip_netmask: ${WLAN_IPV4_ADDRESS}"
+        echo -e "  hotplug: true"
+        echo -e "  is_wan: false"
+        echo -e "  access_point: true"
+        echo -e "  name: ${PIKONEK_WLAN_INTERFACE}"
+        echo -e "  type: interface"
+        echo -e "  use_dhcp: false"
+    fi
     echo -e "- hotplug: true"
     echo -e "  is_wan: true"
     echo -e "  name: ${PIKONEK_WAN_INTERFACE}"
     echo -e "  type: interface"
+    if [ "$PIKONEK_WAN_DHCP_INTERFACE" = false ]; then
+        echo -e "- addresses:"
+        echo -e "  - ip_netmask: ${WAN_IPV4_ADDRESS}"
+    fi
     echo -e "  use_dhcp: ${PIKONEK_WAN_DHCP_INTERFACE}"
     } > "${PIKONEK_INSTALL_DIR}/configs/pikonek_net_mapping.yaml"
     # set the pikonek_dhcp_mapping.yaml
@@ -1609,22 +1951,51 @@ finalExports() {
     echo -e "  interface: ${PIKONEK_LAN_INTERFACE}"
     echo -e "  start: ${pikonek_RANGE_2}"
     echo -e "  lease_time: infinite"
-    echo -e "  subnet: ${subnet}"
+    echo -e "  subnet: ${lan_subnet}"
+    if [ "$WLAN_AP" -eq 1 ]; then
+    echo -e "- end: ${wpikonek_RANGE_1}"
+    echo -e "  interface: ${PIKONEK_WLAN_INTERFACE}"
+    echo -e "  start: ${wpikonek_RANGE_2}"
+    echo -e "  lease_time: infinite"
+    echo -e "  subnet: ${wlan_subnet}"
+    fi
     echo -e "dhcp_option:"
     echo -e "- interface: ${PIKONEK_LAN_INTERFACE}"
-    echo -e "  ipaddress: ${ip_v4}"
+    echo -e "  ipaddress: ${lan_ip_v4}"
     echo -e "  option: 3"
+    if [ "$WLAN_AP" -eq 1 ]; then
+    echo -e "- interface: ${PIKONEK_WLAN_INTERFACE}"
+    echo -e "  ipaddress: ${wlan_ip_v4}"
+    echo -e "  option: 3"
+    fi
     echo -e "hosts:"
-    echo -e "- ip: ${ip_v4}"
+    echo -e "- ip: ${lan_ip_v4}"
     echo -e "  name: pi.konek"
+    if [ "$WLAN_AP" -eq 1 ]; then
+    echo -e "- ip: ${wlan_ip_v4}"
+    echo -e "  name: pi.konek"
+    fi 
     echo -e "interface:"
     echo -e "- name: ${PIKONEK_LAN_INTERFACE}"
+    if [ "$WLAN_AP" -eq 1 ]; then
+    echo -e "- name: ${PIKONEK_WLAN_INTERFACE}"
+    fi
     } >> "${PIKONEK_INSTALL_DIR}/configs/pikonek_dhcp_mapping.yaml"
+    # write the wpa config
+    if [ "$WLAN_AP" -eq 1 ]; then
+    {
+    echo -e "mode: ${ap_mode}"
+    echo -e "ssid: ${SSID}"
+    if [ "$psk" != "" ]; then
+    echo -e "psk: ${psk}"
+    fi
+    echo -e "key_mgmt: ${key_mgmt}"
+    } >> "${PIKONEK_INSTALL_DIR}/configs/pikonek_wpa_mapping.yaml"
+    fi
     # echo the information to the user
     {
-    echo "pikonek_INTERFACE=${PIKONEK_LAN_INTERFACE}"
-    echo "pikonek_DNS_1=${pikonek_DNS_1}"
-    echo "pikonek_DNS_2=${pikonek_DNS_2}"
+    echo "WLAN_AP=${WLAN_AP}"
+    echo "ASK_REBOOT=${ASK_REBOOT}"
     }>> "${setupVars}"
     chmod 644 "${setupVars}"
 
@@ -1883,20 +2254,26 @@ main() {
     # Check if SELinux is Enforcing
     checkSelinux
 
+    # Disable predictable names
+    do_net_names
+
     # Display welcome dialogs
     welcomeDialogs
     # Create directory for PiKonek storage
     install -d -m 755 /etc/pikonek/
+    # Clone/Update the repos
+    clone_or_update_repos
     # Determine available interfaces
     get_available_interfaces
+    get_available_wlan_interfaces
     # Set up wan interface
     setupWanInterface
     # Set up lan interface
     setupLanInterface
     # Decide what upstream DNS Servers to use
+    setupWlanInterface
+    # setDns
     setDNS
-    # Clone/Update the repos
-    clone_or_update_repos
     # Install the Core dependencies
     # pip_install_packages
     # On some systems, lighttpd is not enabled on first install. We need to enable it here if the user
@@ -1919,8 +2296,10 @@ main() {
     configureDhcp
     # configure the network interface
     configureNetwork
-    # Disable predictable names
-    do_net_names
+    # configure wireless access point
+    if [ "$WLAN_AP" -eq 1 ]; then
+        configureWirelessAP
+    if
     # Copy the temp log file into final log location for storage
     copy_to_install_log
     # Add password to web UI if there is none
