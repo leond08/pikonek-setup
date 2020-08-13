@@ -172,7 +172,7 @@ os_check() {
     # This function gets a list of supported OS versions from a TXT record at versions.PiKonek.net
     # and determines whether or not the script is running on one of those systems
     local remote_os_domain valid_os valid_version detected_os_pretty detected_os detected_version display_warning
-    remote_os_domain="Raspbian=10 Ubuntu=18,20 Debian=10"
+    remote_os_domain="Raspbian=10 Ubuntu=18,20"
     valid_os=false
     valid_version=false
     display_warning=true
@@ -1892,6 +1892,11 @@ do_net_names () {
     if [ $(get_net_names) -eq 1 ]; then
         str="Disabling predictable names"
         printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
+        if [ is_pi -eq 1 ]; then
+            if [ -f /etc/default/grub ]; then
+                sed -i "s/GRUB_CMDLINE_LINUX=\"\(.*\)\"/GRUB_CMDLINE_LINUX=\"\1net.ifnames=0 biosdevname=0\"/" /etc/default/grub
+            fi
+        fi
         ln -sf /dev/null /etc/systemd/network/99-default.link
         printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
         echo "ASK_REBOOT=1" > /tmp/setUpVars.conf
@@ -1899,14 +1904,14 @@ do_net_names () {
     fi
     printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
     if [ "$ASK_REBOOT" -eq 1 ]; then
-        str="Your system needs to reboot to continue. Please reboot your system to continue the installation."
+        str="Your system needs to reboot to continue. Please reboot your system to continue the installation. Then run again this installer."
         printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
         exit 1
     fi
 
     # Add a temp file to /tmp this will automatically wipe after reboot
     if [[ -e "/tmp/setUpVars.conf" ]]; then
-        str="Your system needs to reboot to continue. Please reboot your system to continue the installation."
+        str="Your system needs to reboot to continue. Please reboot your system to continue the installation. Then run again this installer."
         printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
         exit 1
     fi
