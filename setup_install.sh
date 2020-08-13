@@ -286,7 +286,7 @@ if is_command apt-get ; then
     fi
     # Since our install script is so large, we need several other programs to successfully get a machine provisioned
     # These programs are stored in an array so they can be looped through later
-    INSTALLER_DEPS=(ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip gawk curl cron wget iptables whiptail git openssl ifupdown)
+    INSTALLER_DEPS=(ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip gawk curl cron wget iptables iptables-persistent iptables-save whiptail git openssl ifupdown)
     # The Web server user,
     LIGHTTPD_USER="www-data"
     # group,
