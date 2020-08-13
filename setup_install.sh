@@ -153,6 +153,8 @@ uninstall() {
     rm -rf /etc/logrotate.d/pikonek
     rm -rf /etc/dnsmasq.d/01-pikonek.conf
     rm -rf /etc/init.d/S70piknkmain
+    rm -rf /etc/init.d/S70pikonekcaptive
+    rm -rf /etc/init.d/S70pikonekcaptivefw
     rm -rf /etc/sudoers.d/pikonek
     rm -rf /usr/local/bin/pikonek
     rm -rf /etc/cron.d/pikonek
@@ -284,7 +286,7 @@ if is_command apt-get ; then
     fi
     # Since our install script is so large, we need several other programs to successfully get a machine provisioned
     # These programs are stored in an array so they can be looped through later
-    INSTALLER_DEPS=(ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip gawk curl cron wget iptables whiptail git openssl)
+    INSTALLER_DEPS=(ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip gawk curl cron wget iptables whiptail git openssl ifupdown)
     # The Web server user,
     LIGHTTPD_USER="www-data"
     # group,

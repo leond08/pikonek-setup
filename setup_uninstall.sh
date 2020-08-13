@@ -15,7 +15,8 @@ rm -rf "${PIKONEK_INSTALL_DIR}/blocked"
 rm -rf "${PIKONEK_INSTALL_DIR}"
 rm -rf /etc/logrotate.d/pikonek
 rm -rf /etc/dnsmasq.d/01-pikonek.conf
-rm -rf /etc/init.d/S70piknkmain
+rm -rf /etc/init.d/S70pikonekcaptive
+rm -rf /etc/init.d/S70pikonekcaptivefw
 rm -rf /etc/sudoers.d/pikonek
 rm -rf /usr/local/bin/pikonek
 rm -rf /etc/cron.d/pikonek
