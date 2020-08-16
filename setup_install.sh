@@ -1480,6 +1480,9 @@ installScripts() {
         install -o "${USER}" -Dm755 -t "${PIKONEK_INSTALL_DIR}/scripts" ./scripts/pikonekupdateblockedlist
         install -o "${USER}" -Dm755 -t "${PIKONEK_INSTALL_DIR}/scripts" ./scripts/updatesoftware
         install -o "${USER}" -Dm755 -t "${PIKONEK_INSTALL_DIR}/scripts" ./scripts/pikonekcli.py
+        install -o "${USER}" -Dm755 -t "${PIKONEK_INSTALL_DIR}/scripts" ./scripts/ntopng
+        install -o "${USER}" -Dm755 -t "${PIKONEK_INSTALL_DIR}/scripts" ./scripts/darkstat
+        install -o "${USER}" -Dm755 -t "${PIKONEK_INSTALL_DIR}/scripts" ./scripts/bandwidthd
         # Create symbolic link for pikonek cli
         ln -s ${PIKONEK_INSTALL_DIR}/scripts/pikonekcli.py /usr/local/bin/pikonek
         printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
