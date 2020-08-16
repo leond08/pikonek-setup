@@ -68,7 +68,7 @@ if [ -z "${USER}" ]; then
   USER="$(id -un)"
 fi
 
-is_pi () {
+is_pi() {
   ARCH=$(dpkg --print-architecture)
   if [ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] ; then
     return 0
@@ -77,8 +77,10 @@ is_pi () {
   fi
 }
 
-if is_pi ; then
-  CMDLINE=/boot/cmdline.txt
+if [ is_pi = 0 ]; then
+  if cat /etc/*release | grep -q "Raspbian"; then
+    CMDLINE=/boot/cmdline.txt
+  fi
 else
   CMDLINE=/proc/cmdline
 fi
@@ -210,7 +212,7 @@ os_check() {
 
     if [ "$display_warning" = true ] && [ "$pikonek_SKIP_OS_CHECK" != true ]; then
         printf "  %b %bUnsupported OS detected%b\\n" "${CROSS}" "${COL_LIGHT_RED}" "${COL_NC}"
-        printf "      https://docs.PiKonek.net/main/prerequesites/#supported-operating-systems\\n"
+        printf "      Please check supported os\\n"
         printf "\\n"
         exit 1
     else
@@ -286,7 +288,7 @@ if is_command apt-get ; then
     fi
     # Since our install script is so large, we need several other programs to successfully get a machine provisioned
     # These programs are stored in an array so they can be looped through later
-    INSTALLER_DEPS=(ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip python3-apt gawk curl cron wget iptables iptables-persistent iptables-save whiptail git openssl ifupdown ntp wpasupplicant)
+    INSTALLER_DEPS=(ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip python3-apt gawk curl cron wget iptables iptables-persistent whiptail git openssl ifupdown ntp wpasupplicant)
     # The Web server user,
     LIGHTTPD_USER="www-data"
     # group,
@@ -498,7 +500,7 @@ get_available_interfaces() {
 
 get_available_wlan_interfaces() {
     # There may be more than one so it's all stored in a variable
-    availableWlanInterfaces="$(ip --oneline link show up | grep wl | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1)"
+    availableWlanInterfaces="$(ip --oneline link show | grep wl | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1)"
 }
 
 # A function for displaying the dialogs the user sees when first running the installer
@@ -1898,7 +1900,7 @@ do_net_names () {
     if [ $(get_net_names) -eq 1 ]; then
         str="Disabling predictable names"
         printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
-        if [ is_pi -eq 1 ]; then
+        if [ is_pi = 1 ]; then
             if [ -f /etc/default/grub ]; then
                 sed -i "s/GRUB_CMDLINE_LINUX=\"\(.*\)\"/GRUB_CMDLINE_LINUX=\"\1net.ifnames=0 biosdevname=0\"/" /etc/default/grub
             fi
