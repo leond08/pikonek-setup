@@ -760,13 +760,13 @@ do_wifi_country() {
     COUNTRY=$(whiptail --menu "Select the country in which the PiKonek is to be used" 20 60 10 ${value} 3>&1 1>&2 2>&3)
 
     if [ $? -eq 0 ];then
-        wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set country "$COUNTRY"
+        wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set country "$COUNTRY" > /dev/null 2>&1
         wpa_cli -i "$PIKONEK_WLAN_INTERFACE" save_config > /dev/null 2>&1
     fi
 
     whiptail --msgbox "Wireless LAN country set to $COUNTRY" 20 60 1
     str="Wireless LAN country set to $COUNTRY"
-    printf "%b  %b %s...\\" "${OVER}" "${INFO}" "${str}"
+    printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
 }
 
 # A function to setup the wan interface
