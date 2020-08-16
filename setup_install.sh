@@ -758,9 +758,6 @@ do_wifi_country() {
     IFS="/"
     value=$(cat /usr/share/zoneinfo/iso3166.tab | tail -n +26 | tr '\t' '/' | tr '\n' '/')
     COUNTRY=$(whiptail --menu "Select the country in which the PiKonek is to be used" 20 60 10 ${value} 3>&1 1>&2 2>&3)
-    IFS=$oIFS
-    COUNTRY=$1
-    true
 
     if [ $? -eq 0 ];then
         wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set country "$COUNTRY"
