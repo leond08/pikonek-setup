@@ -2259,7 +2259,7 @@ main() {
     fi
 
     # Check for supported distribution
-    # distro_check
+    distro_check
 
     # Start the installer
     # Verify there is enough disk space for the install
@@ -2272,10 +2272,10 @@ main() {
     uninstall
 
     # Notify user of package availability
-    # notify_package_updates_available
+    notify_package_updates_available
 
     # Install packages used by this installation script
-    # install_dependent_packages "${INSTALLER_DEPS[@]}"
+    install_dependent_packages "${INSTALLER_DEPS[@]}"
 
     # Check that the installed OS is officially supported - display warning if not
     os_check
@@ -2304,7 +2304,7 @@ main() {
     # setDns
     setDNS
     # Install the Core dependencies
-    # pip_install_packages
+    pip_install_packages
     # On some systems, lighttpd is not enabled on first install. We need to enable it here if the user
     # has chosen to install the web interface, else the `LIGHTTPD_ENABLED` check will fail
     enable_service lighttpd
