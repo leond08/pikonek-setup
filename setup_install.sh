@@ -63,6 +63,7 @@ LIGHTTPD_USER="www-data"
 LIGHTTPD_GROUP="www-data"
 # and config file
 LIGHTTPD_CFG="lighttpd.conf"
+COUNTRY="PH"
 
 if [ -z "${USER}" ]; then
   USER="$(id -un)"
@@ -288,7 +289,7 @@ if is_command apt-get ; then
     fi
     # Since our install script is so large, we need several other programs to successfully get a machine provisioned
     # These programs are stored in an array so they can be looped through later
-    INSTALLER_DEPS=(ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip python3-apt gawk curl cron wget iptables iptables-persistent whiptail git openssl ifupdown ntp wpasupplicant)
+    INSTALLER_DEPS=(build-essential gcc-multilib python-dev python3-dev python3-testresources libssl-dev libffi-dev ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip python3-apt python3-setuptools gawk curl cron wget iptables iptables-persistent whiptail git openssl ifupdown ntp wpasupplicant)
     # The Web server user,
     LIGHTTPD_USER="www-data"
     # group,
@@ -632,10 +633,10 @@ configureWirelessAP() {
 
 get_wifi_country() {
     CODE=${1:-0}
-    if ! wpa_cli -i "$PIKONEK_WLAN_INTERFACE" status > /dev/null 2>&1; then
-        whiptail --msgbox "Could not communicate with wpa_supplicant" 20 60
-        return 1
-    fi
+    # if ! wpa_cli -i "$PIKONEK_WLAN_INTERFACE" status > /dev/null 2>&1; then
+    #     whiptail --msgbox "Could not communicate with wpa_supplicant" 20 60
+    #     return 1
+    # fi
     wpa_cli -i "$PIKONEK_WLAN_INTERFACE" save_config > /dev/null 2>&1
     COUNTRY="$(wpa_cli -i "$PIKONEK_WLAN_INTERFACE" get country)"
     if [ "$COUNTRY" = "FAIL" ]; then
@@ -661,17 +662,19 @@ do_wifi_ap() {
     ap_mode=2
     psk=""
     IFACE_LIST="$(list_wlan_interfaces)"
-    if ! wpa_cli -i "$PIKONEK_WLAN_INTERFACE" status > /dev/null 2>&1; then
-        whiptail --msgbox "Could not communicate with wpa_supplicant" 20 60
-        return 1
-    fi
+    # if ! wpa_cli -i "$PIKONEK_WLAN_INTERFACE" status > /dev/null 2>&1; then
+    #     whiptail --msgbox "Could not communicate with wpa_supplicant" 20 60
+    #     return 1
+    # fi
 
     # Install wpa_supplicant.conf       
     install -m 0644 ${PIKONEK_LOCAL_REPO}/configs/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf
 
-    if [ -z "$(get_wifi_country)" ]; then
-        do_wifi_country
-    fi
+    # if [ -z "$(get_wifi_country)" ]; then
+    #     do_wifi_country
+    # fi
+
+    do_wifi_country
 
     SSID="$1"
     while [ -z "$SSID" ]; do
@@ -751,20 +754,20 @@ do_wifi_ap() {
 
 
 do_wifi_country() {
-    if ! wpa_cli -i "$PIKONEK_WLAN_INTERFACE" status > /dev/null 2>&1; then
-        whiptail --msgbox "Could not communicate with wpa_supplicant" 20 60
-        return 1
-    fi
+    # if ! wpa_cli -i "$PIKONEK_WLAN_INTERFACE" status > /dev/null 2>&1; then
+    #     whiptail --msgbox "Could not communicate with wpa_supplicant" 20 60
+    #     return 1
+    # fi
 
     oIFS="$IFS"
     IFS="/"
     value=$(cat /usr/share/zoneinfo/iso3166.tab | tail -n +26 | tr '\t' '/' | tr '\n' '/')
     COUNTRY=$(whiptail --menu "Select the country in which the PiKonek is to be used" 20 60 10 ${value} 3>&1 1>&2 2>&3)
 
-    if [ $? -eq 0 ];then
-        wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set country "$COUNTRY" > /dev/null 2>&1
-        wpa_cli -i "$PIKONEK_WLAN_INTERFACE" save_config > /dev/null 2>&1
-    fi
+    # if [ $? -eq 0 ];then
+    #     wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set country "$COUNTRY" > /dev/null 2>&1
+    #     wpa_cli -i "$PIKONEK_WLAN_INTERFACE" save_config > /dev/null 2>&1
+    # fi
 
     whiptail --msgbox "Wireless LAN country set to $COUNTRY" 20 60 1
     str="Wireless LAN country set to $COUNTRY"
