@@ -1406,9 +1406,6 @@ installpikonek() {
     cp -r ${PIKONEK_LOCAL_REPO}/pikonek/** /etc/pikonek/pikonek
     # install pikonek core init script to /etc/init.d
     install -m 0755 ${PIKONEK_INSTALL_DIR}/pikonek/etc/init.d/S70piknkmain /etc/init.d/S70piknkmain
-    # install captive portal init script
-    install -m 0755 ${PIKONEK_INSTALL_DIR}/packages/captive/init.d/S70pikonekcaptive /etc/init.d/S70pikonekcaptive
-    install -m 0755 ${PIKONEK_INSTALL_DIR}/packages/captive/init.d/S70pikonekcaptivefw /etc/init.d/S70pikonekcaptivefw
     # install the pikonek db
     mv /etc/pikonek/pikonek/pikonek/db.wifirouter /etc/pikonek/
     # install pikonek core packages
@@ -1437,6 +1434,10 @@ installpikonek() {
         printf "  %b Failure in dependent config copy function.\\n" "${CROSS}"
         exit 1
     fi
+
+    # install captive portal init script
+    install -m 0755 ${PIKONEK_INSTALL_DIR}/packages/captive/init.d/S70pikonekcaptive /etc/init.d/S70pikonekcaptive
+    install -m 0755 ${PIKONEK_INSTALL_DIR}/packages/captive/init.d/S70pikonekcaptivefw /etc/init.d/S70pikonekcaptivefw
     # install default blocked list
     # installDefaultBlockedList
     # install web server
