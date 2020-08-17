@@ -1386,6 +1386,9 @@ installpikonek() {
         install -m 0644 ${PIKONEK_LOCAL_REPO}/configs/sysctl.conf /etc/sysctl.conf
     fi
 
+    # install kernel modules
+    install -m 0644 ${PIKONEK_LOCAL_REPO}/configs/modules /etc/modules
+
     # Install base files and web interface
     if ! installScripts; then
         printf "  %b Failure in dependent script copy function.\\n" "${CROSS}"
