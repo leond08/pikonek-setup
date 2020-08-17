@@ -155,13 +155,15 @@ uninstall() {
     rm -rf "${PIKONEK_INSTALL_DIR}"
     rm -rf /etc/logrotate.d/pikonek
     rm -rf /etc/dnsmasq.d/01-pikonek.conf
+    rm -rf /etc/dnsmasq.d/01-pikonek.conf.old
     rm -rf /etc/init.d/S70piknkmain
     rm -rf /etc/init.d/S70pikonekcaptive
     rm -rf /etc/init.d/S70pikonekcaptivefw
+    rm -rf /etc/sysctl.conf
     rm -rf /etc/sudoers.d/pikonek
     rm -rf /usr/local/bin/pikonek
     rm -rf /etc/cron.d/pikonek
-    rm -rf /etc/cron.daily/pikonekupdateblockedlist
+    rm -rf /etc/cron.daily/pikonekupdateblockedlist   
 }
 
 is_command() {
@@ -289,7 +291,7 @@ if is_command apt-get ; then
     fi
     # Since our install script is so large, we need several other programs to successfully get a machine provisioned
     # These programs are stored in an array so they can be looped through later
-    INSTALLER_DEPS=(build-essential gcc-multilib python-dev python3-dev python3-testresources libssl-dev libffi-dev ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip python3-apt python3-setuptools gawk curl cron wget iptables iptables-persistent whiptail git openssl ifupdown ntp wpasupplicant)
+    INSTALLER_DEPS=(build-essential gcc-multilib python3-dev python3-testresources libssl-dev libffi-dev ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip python3-apt python3-setuptools gawk curl cron wget iptables iptables-persistent whiptail git openssl ifupdown ntp wpasupplicant)
     # A function to check...
     test_dpkg_lock() {
         # An iterator used for counting loop iterations
@@ -384,7 +386,7 @@ update_repo() {
     # Move into the directory that was passed as an argument
     pushd "${directory}" &> /dev/null || return 1
     # Let the user know what's happening
-    printf "  %b %s..." "${INFO}" "${str}"
+    printf "  %b %s...\\n" "${INFO}" "${str}"
     # Stash any local commits as they conflict with our working code
     git stash --all --quiet &> /dev/null || true # Okay for stash failure
     git clean --quiet --force -d || true # Okay for already clean directory
@@ -615,12 +617,23 @@ setupWlanInterface() {
 }
 
 configureWirelessAP() {
-    local str="Configuring wireless access point configuration"
+    local str="Configuring wireless access point"
     printf "  %b %s...\\n" "${INFO}" "${str}"
     if pikonek -w /etc/pikonek/configs/pikonek_wpa_mapping.yaml &> /dev/null; then
         printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
     else
         printf "\\t\\t%bError: Unable to configure wireless access point, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"
+        return 1
+    fi
+}
+
+configurePikonekCore() {
+    local str="Configuring pikonek core"
+    printf "  %b %s...\\n" "${INFO}" "${str}"
+    if pikonek -c /etc/pikonek/configs/pikonek.yaml &> /dev/null; then
+        printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
+    else
+        printf "\\t\\t%bError: Unable to configure pikonek core, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"
         return 1
     fi
 }
@@ -1990,6 +2003,10 @@ finalExports() {
     echo -e "  interface: ${PIKONEK_WLAN_INTERFACE}"
     } > "${PIKONEK_INSTALL_DIR}/configs/pikonek_wpa_mapping.yaml"
     fi
+    # set wan interface in pikonek.yaml
+    {
+    echo -e "wan_interface: ${PIKONEK_WAN_INTERFACE}"
+    } >> "${PIKONEK_INSTALL_DIR}/configs/pikonek.yaml"
     # echo the information to the user
     {
     echo "WLAN_AP=${WLAN_AP}"
@@ -2288,8 +2305,8 @@ main() {
 
     # Install and log everything to a file
     installpikonek | tee -a /proc/$$/fd/3
-    
     finalExports
+    configurePikonekCore
     # configure the dhcp and dns
     configureDhcp
     # configure the network interface
