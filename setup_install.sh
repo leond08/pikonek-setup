@@ -290,13 +290,6 @@ if is_command apt-get ; then
     # Since our install script is so large, we need several other programs to successfully get a machine provisioned
     # These programs are stored in an array so they can be looped through later
     INSTALLER_DEPS=(build-essential gcc-multilib python-dev python3-dev python3-testresources libssl-dev libffi-dev ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip python3-apt python3-setuptools gawk curl cron wget iptables iptables-persistent whiptail git openssl ifupdown ntp wpasupplicant)
-    # The Web server user,
-    LIGHTTPD_USER="www-data"
-    # group,
-    LIGHTTPD_GROUP="www-data"
-    # and config file
-    LIGHTTPD_CFG="lighttpd.conf"
-
     # A function to check...
     test_dpkg_lock() {
         # An iterator used for counting loop iterations
@@ -576,44 +569,45 @@ setupWlanInterface() {
     interfaceCount=$(wc -l <<< "${availableWlanInterfaces}")
 
     # If there is one interface,
-    if [[ "${interfaceCount}" -ge 1 ]]; then
+    if ip --oneline link show | grep -q wl; then
+        if [[ "${interfaceCount}" -ge 1 ]]; then
         # While reading through the available interfaces
-        if whiptail --backtitle "Setting up wireless interface" --title "Wireless Access Point Configuration" --yesno "Do you want to enable wireless access point?" "${r}" "${c}"; then
-            while read -r line; do
-                # use a variable to set the option as OFF to begin with
-                mode="OFF"
-                # If it's the first loop,
-                if [[ "${firstLoop}" -eq 1 ]]; then
-                    # set this as the interface to use (ON)
-                    firstLoop=0
-                    mode="ON"
-                fi
-                # Put all these interfaces into an array
-                interfacesArray+=("${line}" "available" "${mode}")
-            # Feed the available interfaces into this while loop
-            done <<< "${availableWlanInterfaces}"
-            # The whiptail command that will be run, stored in a variable
-            chooseInterfaceCmd=(whiptail --separate-output --radiolist "Choose the WLAN Interface (press space to toggle selection)" "${r}" "${c}" "${interfaceCount}")
-            # Now run the command using the interfaces saved into the array
-            chooseInterfaceOptions=$("${chooseInterfaceCmd[@]}" "${interfacesArray[@]}" 2>&1 >/dev/tty) || \
-            # If the user chooses Cancel, exit
-            { printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
-            # For each interface
-            for desiredInterface in ${chooseInterfaceOptions}; do
-                # Set the one the user selected as the interface to use
-                PIKONEK_WLAN_INTERFACE=${desiredInterface}
-                # and show this information to the user
-                printf "  %b Using WLAN interface: %s\\n" "${INFO}" "${PIKONEK_WLAN_INTERFACE}"
-            done
-            WLAN_AP=1
-            # set up ip
-            getStaticIPv4WlanSettings
-            # Set up ap
-            do_wifi_ap           
-        else
-            printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
+            if whiptail --backtitle "Setting up wireless interface" --title "Wireless Access Point Configuration" --yesno "Do you want to enable wireless access point?" "${r}" "${c}"; then
+                while read -r line; do
+                    # use a variable to set the option as OFF to begin with
+                    mode="OFF"
+                    # If it's the first loop,
+                    if [[ "${firstLoop}" -eq 1 ]]; then
+                        # set this as the interface to use (ON)
+                        firstLoop=0
+                        mode="ON"
+                    fi
+                    # Put all these interfaces into an array
+                    interfacesArray+=("${line}" "available" "${mode}")
+                # Feed the available interfaces into this while loop
+                done <<< "${availableWlanInterfaces}"
+                # The whiptail command that will be run, stored in a variable
+                chooseInterfaceCmd=(whiptail --separate-output --radiolist "Choose the WLAN Interface (press space to toggle selection)" "${r}" "${c}" "${interfaceCount}")
+                # Now run the command using the interfaces saved into the array
+                chooseInterfaceOptions=$("${chooseInterfaceCmd[@]}" "${interfacesArray[@]}" 2>&1 >/dev/tty) || \
+                # If the user chooses Cancel, exit
+                { printf "  %bCancel was selected, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; exit 1; }
+                # For each interface
+                for desiredInterface in ${chooseInterfaceOptions}; do
+                    # Set the one the user selected as the interface to use
+                    PIKONEK_WLAN_INTERFACE=${desiredInterface}
+                    # and show this information to the user
+                    printf "  %b Using WLAN interface: %s\\n" "${INFO}" "${PIKONEK_WLAN_INTERFACE}"
+                done
+                WLAN_AP=1
+                # set up ip
+                getStaticIPv4WlanSettings
+                # Set up ap
+                do_wifi_ap           
+            else
+                printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
+            fi
         fi
-
     else
         str="No available wireless interface"
         printf "%b  %b %s...\\" "${OVER}" "${INFO}" "${str}"
@@ -633,10 +627,10 @@ configureWirelessAP() {
 
 get_wifi_country() {
     CODE=${1:-0}
-    # if ! wpa_cli -i "$PIKONEK_WLAN_INTERFACE" status > /dev/null 2>&1; then
-    #     whiptail --msgbox "Could not communicate with wpa_supplicant" 20 60
-    #     return 1
-    # fi
+    if ! wpa_cli -i "$PIKONEK_WLAN_INTERFACE" status > /dev/null 2>&1; then
+        whiptail --msgbox "Could not communicate with wpa_supplicant" 20 60
+        return 1
+    fi
     wpa_cli -i "$PIKONEK_WLAN_INTERFACE" save_config > /dev/null 2>&1
     COUNTRY="$(wpa_cli -i "$PIKONEK_WLAN_INTERFACE" get country)"
     if [ "$COUNTRY" = "FAIL" ]; then
@@ -661,12 +655,6 @@ list_wlan_interfaces() {
 do_wifi_ap() {
     ap_mode=2
     psk=""
-    IFACE_LIST="$(list_wlan_interfaces)"
-    # if ! wpa_cli -i "$PIKONEK_WLAN_INTERFACE" status > /dev/null 2>&1; then
-    #     whiptail --msgbox "Could not communicate with wpa_supplicant" 20 60
-    #     return 1
-    # fi
-
     # Install wpa_supplicant.conf       
     install -m 0644 ${PIKONEK_LOCAL_REPO}/configs/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf
 
@@ -674,7 +662,7 @@ do_wifi_ap() {
     #     do_wifi_country
     # fi
 
-    do_wifi_country
+    # do_wifi_country
 
     SSID="$1"
     while [ -z "$SSID" ]; do
@@ -717,39 +705,13 @@ do_wifi_ap() {
             -e 's;(;\\(;g'   \
             -e 's;);\\);g'   \
             -e 's;";\\\\\";g')"
-    
-    # ID="$(wpa_cli -i "$PIKONEK_WLAN_INTERFACE" add_network)"
-    # wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set_network "$ID" ssid "\"$SSID\"" 2>&1 | grep -q "OK"
-    # RET=$((RET + $?))
-    # # set the mode to 2 -- for ap
-    # wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set_network "$ID" mode 2 2>&1 | grep -q "OK"
-    # RET=$((RET + $?))
 
     if [ -z "$PASSPHRASE" ]; then
-        # wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set_network "$ID" key_mgmt NONE 2>&1 | grep -q "OK"
-        # RET=$((RET + $?))
         key_mgmt="NONE"
     else
-        # wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set_network "$ID" key_mgmt WPA-PSK 2>&1 | grep -q "OK"
-        # wpa_cli -i "$PIKONEK_WLAN_INTERFACE" set_network "$ID" psk "\"$PASSPHRASE\"" 2>&1 | grep -q "OK"
-        # RET=$((RET + $?))
         psk="$PASSPHRASE"
         key_mgmt="WPA-PSK"
     fi
-
-    # if [ $RET -eq 0 ]; then
-    #     wpa_cli -i "$PIKONEK_WLAN_INTERFACE" enable_network "$ID" > /dev/null 2>&1
-    # else
-    #     wpa_cli -i "$PIKONEK_WLAN_INTERFACE" remove_network "$ID" > /dev/null 2>&1
-    #     whiptail --msgbox "Failed to set SSID or passphrase" 20 60
-    # fi
-    # wpa_cli -i "$PIKONEK_WLAN_INTERFACE" save_config > /dev/null 2>&1
-
-    # echo "$IFACE_LIST" | while read IFACE; do
-    #     wpa_cli -i "$IFACE" reconfigure > /dev/null 2>&1
-    # done
-
-    # return $RET
 }
 
 
@@ -1387,7 +1349,6 @@ clean_existing() {
 
 # Install base files and web interface
 installpikonek() {
-    # If the user wants to install the Web interface,
     if [[ ! -d "${webroot}" ]]; then
         # make the Web directory if necessary
         install -d -m 0755 ${webroot}
@@ -1421,7 +1382,6 @@ installpikonek() {
         if grep -qE '#net.ipv4.ip_forward=1' /etc/sysctl.conf; then
             sed -i '/#net.ipv4.ip_forward=1/a\net.ipv4.ip_forward=1' /etc/sysctl.conf
         fi
-
     else
         install -m 0644 ${PIKONEK_LOCAL_REPO}/configs/sysctl.conf /etc/sysctl.conf
     fi
@@ -1672,7 +1632,8 @@ notify_package_updates_available() {
 
 # Install python requirements using requirements.txt
 pip_install_packages() {
-    printf "  %b Installing required package for pikonek core..." "${INFO}"
+    printf "  %b Installing required package for pikonek core...\\n" "${INFO}"
+    printf "  %b Please wait and take some coffe...\\n" "${INFO}"
     pip3 install -r "${PIKONEK_LOCAL_REPO}/pikonek/requirements.txt" || \
     { printf "  %bUnable to install required pikonek core dependencies, unable to continue%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; \
     exit 1; \
@@ -2345,6 +2306,48 @@ main() {
         # shellcheck disable=SC1091
         pikonek -p "${pw}"
         echo "WEBPASSWORD=${pw}" >> "${setupVars}"
+    fi
+
+    # Enable service
+    enable_service S70piknkmain
+    enable_service S70pikonekcaptive
+    enable_service S70pikonekcaptivefw
+
+    if check_service_active "S70piknkmain"; then
+        PIKONEK_MAIN_ENABLED=true
+    else
+        PIKONEK_MAIN_ENABLED=false
+    fi
+    if check_service_active "S70pikonekcaptive"; then
+        PIKONEK_CAPTIVE_ENABLED=true
+    else
+        PIKONEK_CAPTIVE_ENABLED=false
+    fi
+    if check_service_active "S70pikonekcaptivefw"; then
+        PIKONEK_CAPTIVEFW_ENABLED=true
+    else
+        PIKONEK_CAPTIVEFW_ENABLED=false
+    fi
+
+    if [[ "${PIKONEK_MAIN_ENABLED}" == false ]]; then
+        restart_service S70piknkmain
+        enable_service S70piknkmain
+    else
+        printf "  %b S70piknkmain is disabled, skipping service restart\\n" "${INFO}"
+    fi
+
+    if [[ "${PIKONEK_CAPTIVE_ENABLED}" == false ]]; then
+        restart_service S70pikonekcaptive
+        enable_service S70pikonekcaptive
+    else
+        printf "  %b S70pikonekcaptive is disabled, skipping service restart\\n" "${INFO}"
+    fi
+
+    if [[ "${PIKONEK_CAPTIVEFW_ENABLED}" == false ]]; then
+        restart_service S70pikonekcaptivefw
+        enable_service S70pikonekcaptivefw
+    else
+        printf "  %b S70pikonekcaptive is disabled, skipping service restart\\n" "${INFO}"
     fi
 
     if [[ "${LIGHTTPD_ENABLED}" == true ]]; then
