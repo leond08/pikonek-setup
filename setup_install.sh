@@ -1740,6 +1740,7 @@ createIPSET() {
     local str="Creating ipset..."
     printf "  %b %s..." "${INFO}" "${str}"
     if /usr/sbin/ipset create WALLED_GARDEN_IPV4 hash:ip family inet > /dev/null 2>&1; then
+        /usr/sbin/ipset save > /etc/pikonek/ipset.rules
         printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
     else
         local str="Not creating. Set name already exist."
