@@ -2348,6 +2348,7 @@ main() {
     enable_service S70piknkmain
     enable_service S70pikonekcaptive
     enable_service S70pikonekcaptivefw
+    enable_service iptables # enable netfilter-persistent
 
     if check_service_active "S70piknkmain"; then
         PIKONEK_MAIN_ENABLED=true
