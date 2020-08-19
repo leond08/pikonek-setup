@@ -292,7 +292,7 @@ if is_command apt-get ; then
     fi
     # Since our install script is so large, we need several other programs to successfully get a machine provisioned
     # These programs are stored in an array so they can be looped through later
-    INSTALLER_DEPS=(build-essential gcc-multilib python3-dev python3-testresources libssl-dev libffi-dev ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip python3-apt python3-setuptools gawk curl cron wget iptables iptables-persistent whiptail git openssl ifupdown ntp wpasupplicant)
+    INSTALLER_DEPS=(build-essential gcc-multilib python3-dev python3-testresources libssl-dev libffi-dev ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip python3-apt python3-setuptools gawk curl cron wget iptables iptables-persistent ipset whiptail git openssl ifupdown ntp wpasupplicant)
     # A function to check...
     test_dpkg_lock() {
         # An iterator used for counting loop iterations
@@ -1735,6 +1735,14 @@ install_dependent_packages() {
     return 0
 }
 
+# Create ipset wallgarden
+createIPSET() {
+    local str="Creating ipset..."
+    printf "  %b %s..." "${INFO}" "${str}"
+    /usr/sbin/ipset create WALLED_GARDEN_IPV4 hash:ip family inet > /dev/null 2>&1
+    printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
+}
+
 # Install the Web interface dashboard
 installpikonekWebServer() {
     local str="Backing up index.lighttpd.html"
@@ -2008,7 +2016,7 @@ finalExports() {
     {
     echo -e "wan_interface: ${PIKONEK_WAN_INTERFACE}"
     echo -e "architecture: ${ARCH}"
-    echo -e "os: ${OS"
+    echo -e "os: ${OS}"
     } >> "${PIKONEK_INSTALL_DIR}/configs/pikonek.yaml"
     # echo the information to the user
     {
@@ -2318,8 +2326,8 @@ main() {
     if [ "$WLAN_AP" -eq 1 ]; then
         configureWirelessAP
     fi
-    # Copy the temp log file into final log location for storage
-    copy_to_install_log
+    # Create ipset
+    createIPSET
     # Add password to web UI if there is none
     pw=""
     # If no password is set,
@@ -2382,6 +2390,9 @@ main() {
 
     printf "  %b Restarting services...\\n" "${INFO}"
     # Start services
+
+    # Copy the temp log file into final log location for storage
+    copy_to_install_log
 
     displayFinalMessage "${pw}"
     if (( ${#pw} > 0 )) ; then
