@@ -1917,6 +1917,7 @@ do_net_names () {
 
 # Final export of variables
 finalExports() {
+    ARCH=$(dpkg --print-architecture)
     local lan_subnet=$(ipcalc -cn $LAN_IPV4_ADDRESS | awk 'FNR == 2 {print $2}')
     local lan_ip_v4=$(ipcalc -cn $LAN_IPV4_ADDRESS | awk 'FNR == 1 {print $2}')
     if [ "$WLAN_AP" -eq 1 ]; then
