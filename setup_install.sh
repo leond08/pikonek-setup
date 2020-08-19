@@ -196,6 +196,7 @@ os_check() {
         versions_part=$(echo "$i" | cut -d '=' -f2-)
 
         if [[ "${detected_os}" =~ ${os_part} ]]; then
+          OS="${detected_os}"
           valid_os=true
           IFS="," read -r -a supportedVer <<<"${versions_part}"
           for x in "${supportedVer[@]}"
@@ -2006,6 +2007,8 @@ finalExports() {
     # set wan interface in pikonek.yaml
     {
     echo -e "wan_interface: ${PIKONEK_WAN_INTERFACE}"
+    echo -e "architecture: ${ARCH}"
+    echo -e "os: ${OS"
     } >> "${PIKONEK_INSTALL_DIR}/configs/pikonek.yaml"
     # echo the information to the user
     {
