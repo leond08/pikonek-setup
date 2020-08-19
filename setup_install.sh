@@ -1739,8 +1739,12 @@ install_dependent_packages() {
 createIPSET() {
     local str="Creating ipset..."
     printf "  %b %s..." "${INFO}" "${str}"
-    /usr/sbin/ipset create WALLED_GARDEN_IPV4 hash:ip family inet > /dev/null 2>&1
-    printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
+    if /usr/sbin/ipset create WALLED_GARDEN_IPV4 hash:ip family inet > /dev/null 2>&1; then
+        printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
+    else
+        local str="Not creating. Set name already exist."
+        printf "%b  %b %s\\n" "${OVER}" "${CROSS}" "${str}"
+    fi
 }
 
 # Install the Web interface dashboard
