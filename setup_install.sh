@@ -143,6 +143,12 @@ show_ascii_berry() {
 }
 
 uninstall() {
+    if [[ -e "/etc/pikonek/ipset.rules" ]]; then
+        /usr/sbin/ipset destroy WALLED_GARDEN_IPV4 > /dev/null 2>&1 || echo 0
+    fi
+    if [[ -e "/etc/pikonek/configs/iptables.default.rules" ]]; then
+        /usr/sbin/iptables-restore < iptables.default.rules
+    fi
     # Remove existing files
     rm -rf "${PIKONEK_INSTALL_DIR}/configs"
     rm -rf "${PIKONEK_INSTALL_DIR}/scripts"
@@ -164,7 +170,6 @@ uninstall() {
     rm -rf /usr/local/bin/pikonek
     rm -rf /etc/cron.d/pikonek
     rm -rf /etc/cron.daily/pikonekupdateblockedlist
-    /usr/sbin/ipset destroy WALLED_GARDEN_IPV4 > /dev/null 2>&1 || echo 0
 }
 
 is_command() {
