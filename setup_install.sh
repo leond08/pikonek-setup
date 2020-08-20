@@ -163,7 +163,8 @@ uninstall() {
     rm -rf /etc/sudoers.d/pikonek
     rm -rf /usr/local/bin/pikonek
     rm -rf /etc/cron.d/pikonek
-    rm -rf /etc/cron.daily/pikonekupdateblockedlist   
+    rm -rf /etc/cron.daily/pikonekupdateblockedlist
+    /usr/sbin/ipset destroy WALLED_GARDEN_IPV4 > /dev/null 2>&1 || echo 0
 }
 
 is_command() {
@@ -1739,13 +1740,9 @@ install_dependent_packages() {
 createIPSET() {
     local str="Creating ipset..."
     printf "  %b %s..." "${INFO}" "${str}"
-    if /usr/sbin/ipset create WALLED_GARDEN_IPV4 hash:ip family inet > /dev/null 2>&1; then
-        /usr/sbin/ipset save > /etc/pikonek/ipset.rules
-        printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
-    else
-        local str="Not creating. Set name already exist."
-        printf "%b  %b %s\\n" "${OVER}" "${CROSS}" "${str}"
-    fi
+    /usr/sbin/ipset create WALLED_GARDEN_IPV4 hash:ip family inet
+    /usr/sbin/ipset save > /etc/pikonek/ipset.rules
+    printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
 }
 
 # Install the Web interface dashboard
@@ -1945,6 +1942,7 @@ finalExports() {
         echo -e "  hotplug: true"
         echo -e "  is_wan: false"
         echo -e "  access_point: true"
+        echo -e "  is_wlan: true"
         echo -e "  name: ${PIKONEK_WLAN_INTERFACE}"
         echo -e "  type: interface"
         echo -e "  use_dhcp: false"
