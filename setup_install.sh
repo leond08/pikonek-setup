@@ -298,7 +298,7 @@ if is_command apt-get ; then
     fi
     # Since our install script is so large, we need several other programs to successfully get a machine provisioned
     # These programs are stored in an array so they can be looped through later
-    INSTALLER_DEPS=(build-essential gcc-multilib python3-dev python3-testresources libssl-dev libffi-dev ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip python3-apt python3-setuptools gawk curl cron wget iptables iptables-persistent ipset whiptail git openssl ifupdown ntp wpasupplicant)
+    INSTALLER_DEPS=(build-essential gcc-multilib python3-dev python3-testresources libssl-dev libffi-dev ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip python3-apt python3-setuptools gawk curl cron wget iptables iptables-persistent ipset whiptail git openssl ifupdown ntp wpasupplicant mosquitto)
     # A function to check...
     test_dpkg_lock() {
         # An iterator used for counting loop iterations
@@ -1899,6 +1899,7 @@ do_net_names () {
         if [ is_pi = 1 ]; then
             if [ -f /etc/default/grub ]; then
                 sed -i "s/GRUB_CMDLINE_LINUX=\"\(.*\)\"/GRUB_CMDLINE_LINUX=\"\1net.ifnames=0 biosdevname=0\"/" /etc/default/grub
+                update-grub
             fi
         fi
         ln -sf /dev/null /etc/systemd/network/99-default.link
@@ -1936,7 +1937,7 @@ finalExports() {
     echo -e "network_config:"
     echo -e "- addresses:"
     echo -e "  - ip_netmask: ${LAN_IPV4_ADDRESS}"
-    echo -e "  hotplug: true"
+    echo -e "  hotplug: false"
     echo -e "  is_wan: false"
     echo -e "  name: ${PIKONEK_LAN_INTERFACE}"
     echo -e "  type: interface"
@@ -1944,7 +1945,7 @@ finalExports() {
     if [ "$WLAN_AP" -eq 1 ]; then
         echo -e "- addresses:"
         echo -e "  - ip_netmask: ${WLAN_IPV4_ADDRESS}"
-        echo -e "  hotplug: true"
+        echo -e "  hotplug: false"
         echo -e "  is_wan: false"
         echo -e "  access_point: true"
         echo -e "  is_wlan: true"
@@ -1955,13 +1956,13 @@ finalExports() {
     if [ "$PIKONEK_WAN_DHCP_INTERFACE" = false ]; then
     echo -e "- addresses:"
     echo -e "  - ip_netmask: ${WAN_IPV4_ADDRESS}"
-    echo -e "  hotplug: true"
+    echo -e "  hotplug: false"
     echo -e "  is_wan: true"
     echo -e "  name: ${PIKONEK_WAN_INTERFACE}"
     echo -e "  type: interface"
     echo -e "  use_dhcp: ${PIKONEK_WAN_DHCP_INTERFACE}"
     else
-    echo -e "- hotplug: true"
+    echo -e "- hotplug: false"
     echo -e "  is_wan: true"
     echo -e "  name: ${PIKONEK_WAN_INTERFACE}"
     echo -e "  type: interface"
