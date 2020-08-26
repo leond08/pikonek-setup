@@ -1367,6 +1367,17 @@ clean_existing() {
     done
 }
 
+configureMosquitto() {
+    local str="Configuring mqtt server..."
+    printf "  %b %s..." "${INFO}" "${str}"
+    touch /etc/mosquitto/passwd
+    mqtt_username = $(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 10)
+    mqtt_password = $(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 10)
+    mosquitto_passwd -b /etc/mosquitto/passwd ${mqtt_username} ${mqtt_password}
+    install -m 0644 ${PIKONEK_LOCAL_REPO}/configs/mosquitto.conf /etc/mosquitto/mosquitto.conf
+    printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
+}   
+
 # Install base files and web interface
 installpikonek() {
     if [[ ! -d "${webroot}" ]]; then
@@ -2027,10 +2038,13 @@ finalExports() {
     echo -e "wan_interface: ${PIKONEK_WAN_INTERFACE}"
     echo -e "architecture: ${ARCH}"
     echo -e "os: ${OS}"
+    echo -e "services:"
+    echo -e "- name: mqtt"
+    echo -e "  username: ${mqtt_username}" #
+    echo -e "  password: ${mqtt_password}" # TODO: Must not be plain
     } >> "${PIKONEK_INSTALL_DIR}/configs/pikonek.yaml"
     # echo the information to the user
     {
-    echo "WLAN_AP=${WLAN_AP}"
     echo "ASK_REBOOT=${ASK_REBOOT}"
     }>> "${setupVars}"
     chmod 644 "${setupVars}"
