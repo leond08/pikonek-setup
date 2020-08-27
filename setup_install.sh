@@ -1,15 +1,5 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC1090
-
-# PiKonek: A black hole for Internet advertisements
-# (c) 2020 PiKonek
-# Pisowifi and Firewall Management
-#
-# Installs and Updates PiKonek
-#
-# -e option instructs bash to immediately exit if any command [1] has a non-zero exit status
-# We do not want users to end up with a partially working install, so we exit the script
-# instead of continuing the installation with something broken
 set -e
 
 ######## VARIABLES #########
@@ -37,7 +27,6 @@ EOM
 installLogLoc=/etc/pikonek/install.log
 # This is an important file as it contains information specific to the machine it's being installed on
 setupVars=/etc/pikonek/setupVars.conf
-# PiKonek uses lighttpd as a Web server, and this is the config file for it
 # shellcheck disable=SC2034
 webroot="/var/www/html"
 pikonekGitUrl="https://github.com/leond08/pikonek.git"
@@ -2352,6 +2341,9 @@ main() {
     fi
     # Create ipset
     createIPSET
+
+    # configrue mqtt
+    configureMosquitto()
     # Add password to web UI if there is none
     pw=""
     # If no password is set,
