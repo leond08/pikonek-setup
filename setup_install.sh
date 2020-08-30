@@ -836,7 +836,7 @@ setupLanInterface() {
 
         if [ "$countIface" -eq 1 ]; then
             # Put all these interfaces into an array
-            interfacesArray+=("eth1" "available" "ON")
+            interfacesArray+=("lan1" "available" "ON")
         else
             if [ "$line" != "$PIKONEK_WAN_INTERFACE" ]; then
                 if [ $mode == "OFF" ]; then
@@ -1898,7 +1898,7 @@ do_net_names () {
         printf "%b  %b %s...\\n" "${OVER}" "${INFO}" "${str}"
         if [ is_pi = 1 ]; then
             if [ -f /etc/default/grub ]; then
-                sed -i "s/GRUB_CMDLINE_LINUX=\"\(.*\)\"/GRUB_CMDLINE_LINUX=\"\1net.ifnames=0 biosdevname=0\"/" /etc/default/grub
+                sed -i "s/GRUB_CMDLINE_LINUX=\"\(.*\)\"/GRUB_CMDLINE_LINUX=\"\1net.ifnames=0\"/" /etc/default/grub
                 update-grub
             fi
         fi
@@ -2294,7 +2294,7 @@ main() {
     checkSelinux
 
     # Disable predictable names
-    do_net_names
+    # do_net_names
 
     # Display welcome dialogs
     welcomeDialogs
