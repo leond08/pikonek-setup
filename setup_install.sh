@@ -2031,6 +2031,9 @@ finalExports() {
     echo -e "- name: mqtt"
     echo -e "  username: ${mqtt_username}" #
     echo -e "  password: ${mqtt_password}" # TODO: Must not be plain
+    echo -e "  port: 1883"
+    echo -e "  tls: false"
+    echo -e "  keep_alive: 5"
     } >> "${PIKONEK_INSTALL_DIR}/configs/pikonek.yaml"
     # echo the information to the user
     {
