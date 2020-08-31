@@ -487,7 +487,15 @@ find_IPv4_information() {
 # Get available interfaces that are UP
 get_available_interfaces() {
     # There may be more than one so it's all stored in a variable
-    availableInterfaces="$(ip --oneline link show up | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1 | grep eth)"
+    # availableInterfaces="$(ip --oneline link show up | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1 | grep eth)"
+    availableInterfaces="$(ip --oneline link show up | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1)"
+}
+
+# Get available interfaces
+get_available_lan_interfaces() {
+    # There may be more than one so it's all stored in a variable
+    # availableInterfaces="$(ip --oneline link show up | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1 | grep eth)"
+    availableLanInterfaces="$(ip --oneline link show | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1)"
 }
 
 get_available_wlan_interfaces() {
@@ -818,7 +826,7 @@ setupLanInterface() {
     local firstLoop=1
 
     # Find out how many interfaces are available to choose from
-    interfaceCount=$(wc -l <<< "${availableInterfaces}")
+    interfaceCount=$(wc -l <<< "${availableLanInterfaces}")
 
     # If there is one interface,
     if [[ "${interfaceCount}" -eq 1 ]]; then
