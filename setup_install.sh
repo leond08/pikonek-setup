@@ -2330,6 +2330,7 @@ main() {
     clone_or_update_repos
     # Determine available interfaces
     get_available_interfaces
+    get_available_lan_interfaces
     get_available_wlan_interfaces
     # Set up wan interface
     setupWanInterface
