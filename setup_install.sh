@@ -832,37 +832,52 @@ setupLanInterface() {
     if [[ "${interfaceCount}" -eq 1 ]]; then
         # Set it as the interface to use since there is no other option
         countIface=1
-        interfaceCount=2
+        # interfaceCount=2
         # printf "  %b Using LAN interface: %s\\n" "${INFO}" "${PIKONEK_LAN_INTERFACE}"
     fi
     # Otherwise,
     # While reading through the available interfaces
-    mode="OFF"
+    # mode="OFF"
     while read -r line; do
         # use a variable to set the option as OFF to begin with
-        # Put all these interfaces into an array
-
-        if [ "$countIface" -eq 1 ]; then
-            # Put all these interfaces into an array
-            interfacesArray+=("lan1" "available" "ON")
-        else
-            if [ "$line" != "$PIKONEK_WAN_INTERFACE" ]; then
-                if [ $mode == "OFF" ]; then
-                    mode="ON"
-                    count=$((count+1))
-                fi
-                # If it equals 1,
-                # if [[ "${count}" == 1 ]]; then
-                #     #
-                #     mode="OFF"
-                # fi
-
-                interfacesArray+=("${line}" "available" "${mode}")
-            fi
+        mode="OFF"
+        # If it's the first loop,
+        if [[ "${firstLoop}" -eq 1 ]]; then
+            # set this as the interface to use (ON)
+            firstLoop=0
+            mode="ON"
         fi
-
+        # Put all these interfaces into an array
+        if [[ "$line" != "$PIKONEK_WAN_INTERFACE" ]]; then
+            interfacesArray+=("${line}" "available" "${mode}")
+        fi
     # Feed the available interfaces into this while loop
-    done <<< "${availableInterfaces}"
+    done <<< "${availableLanInterfaces}"
+    # while read -r line; do
+    #     # use a variable to set the option as OFF to begin with
+    #     # Put all these interfaces into an array
+
+    #     if [ "$countIface" -eq 1 ]; then
+    #         # Put all these interfaces into an array
+    #         interfacesArray+=("lan1" "available" "ON")
+    #     else
+    #         if [ "$line" != "$PIKONEK_WAN_INTERFACE" ]; then
+    #             if [ $mode == "OFF" ]; then
+    #                 mode="ON"
+    #                 count=$((count+1))
+    #             fi
+    #             # If it equals 1,
+    #             # if [[ "${count}" == 1 ]]; then
+    #             #     #
+    #             #     mode="OFF"
+    #             # fi
+
+    #             interfacesArray+=("${line}" "available" "${mode}")
+    #         fi
+    #     fi
+
+    # # Feed the available interfaces into this while loop
+    # done <<< "${availableLanInterfaces}"
     # The whiptail command that will be run, stored in a variable
     chooseInterfaceCmd=(whiptail --separate-output --radiolist "Choose the LAN Interface (press space to toggle selection)" "${r}" "${c}" "${interfaceCount}")
     # Now run the command using the interfaces saved into the array
