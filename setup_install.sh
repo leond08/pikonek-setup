@@ -2017,9 +2017,9 @@ finalExports() {
     echo -e "- ip: ${pikonek_DNS_1}"
     echo -e "- ip: ${pikonek_DNS_2}"
     echo -e "dhcp_range:"
-    echo -e "- end: ${pikonek_RANGE_1}"
+    echo -e "- end: ${pikonek_RANGE_2}"
     echo -e "  interface: ${PIKONEK_LAN_INTERFACE}"
-    echo -e "  start: ${pikonek_RANGE_2}"
+    echo -e "  start: ${pikonek_RANGE_1}"
     echo -e "  lease_time: infinite"
     echo -e "  subnet: ${lan_subnet}"
     if [ "$WLAN_AP" -eq 1 ]; then
