@@ -219,6 +219,20 @@ os_check() {
     fi
 }
 
+nic_check() {
+    local str="Check network interface..."
+    printf "  %b %s...\\n" "${INFO}" "${str}"
+    interfacesNic="$(ip --oneline link show | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1 | grep -v wl)"
+    nicCount=$(wc -l <<< "${interfacesNic}")
+    if [[ "${nicCount}" -ge 2 ]]; then
+        printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
+    else
+        printf "  %b %bYou must have atleast two network lan interface%b\\n" "${CROSS}" "${COL_LIGHT_RED}" "${COL_NC}"
+        printf "\\n"
+        exit 1
+    fi
+}
+
 # Compatibility
 distro_check() {
 # If apt-get is installed, then we know it's part of the Debian family
@@ -488,14 +502,14 @@ find_IPv4_information() {
 get_available_interfaces() {
     # There may be more than one so it's all stored in a variable
     # availableInterfaces="$(ip --oneline link show up | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1 | grep eth)"
-    availableInterfaces="$(ip --oneline link show up | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1)"
+    availableInterfaces="$(ip --oneline link show up | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1 | grep -v wl)"
 }
 
 # Get available interfaces
 get_available_lan_interfaces() {
     # There may be more than one so it's all stored in a variable
     # availableInterfaces="$(ip --oneline link show up | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1 | grep eth)"
-    availableLanInterfaces="$(ip --oneline link show | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1)"
+    availableLanInterfaces="$(ip --oneline link show | grep -v lo | awk '{print $2}' | cut -d':' -f1 | cut -d'@' -f1 | grep -v wl)"
 }
 
 get_available_wlan_interfaces() {
@@ -2305,6 +2319,10 @@ main() {
         verifyFreeDiskSpace
     fi
 
+    # Check nic
+    nic_check
+
+    # clean 
     uninstall
 
     # Notify user of package availability
