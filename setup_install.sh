@@ -138,6 +138,10 @@ uninstall() {
     if [[ -e "/etc/pikonek/configs/iptables.default.rules" ]]; then
         /usr/sbin/iptables-restore < /etc/pikonek/configs/iptables.default.rules > /dev/null 2>&1 || echo 0
     fi
+    # Stop services
+    sudo /etc/init.d/S70piknkmain stop || echo 0
+    sudo /etc/init.d/S70pikonekcaptive stop || echo 0
+    sudo /etc/init.d/S70pikonekcaptivefw stop || echo 0
     # Remove existing files
     rm -rf "${PIKONEK_INSTALL_DIR}/configs"
     rm -rf "${PIKONEK_INSTALL_DIR}/scripts"
