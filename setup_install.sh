@@ -2346,7 +2346,7 @@ main() {
     createIPSET
 
     # configrue mqtt
-    configureMosquitto()
+    configureMosquitto
     # Add password to web UI if there is none
     pw=""
     # If no password is set,
