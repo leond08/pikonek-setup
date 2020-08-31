@@ -148,6 +148,7 @@ uninstall() {
     rm -rf "${PIKONEK_INSTALL_DIR}/install.log"
     rm -rf "${PIKONEK_INSTALL_DIR}/blocked"
     rm -rf "${PIKONEK_INSTALL_DIR}"
+    rm -rf /etc/mosquitto/passwd
     rm -rf /etc/logrotate.d/pikonek
     rm -rf /etc/dnsmasq.d/01-pikonek.conf
     rm -rf /etc/dnsmasq.d/01-pikonek.conf.old
