@@ -1397,8 +1397,8 @@ configureMosquitto() {
     local str="Configuring mqtt server..."
     printf "  %b %s..." "${INFO}" "${str}"
     touch /etc/mosquitto/passwd
-    mqtt_username = $(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 10)
-    mqtt_password = $(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 10)
+    mqtt_username=$(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 10)
+    mqtt_password=$(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 10)
     mosquitto_passwd -b /etc/mosquitto/passwd ${mqtt_username} ${mqtt_password}
     install -m 0644 ${PIKONEK_LOCAL_REPO}/configs/mosquitto.conf /etc/mosquitto/mosquitto.conf
     printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
@@ -2374,7 +2374,11 @@ main() {
 
     # Install and log everything to a file
     installpikonek | tee -a /proc/$$/fd/3
+    # configrue mqtt
+    configureMosquitto
+
     finalExports
+    
     configurePikonekCore
     # configure the dhcp and dns
     configureDhcp
@@ -2386,9 +2390,6 @@ main() {
     fi
     # Create ipset
     createIPSET
-
-    # configrue mqtt
-    configureMosquitto
     # Add password to web UI if there is none
     pw=""
     # If no password is set,
