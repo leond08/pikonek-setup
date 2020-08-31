@@ -1395,7 +1395,7 @@ clean_existing() {
 
 configureMosquitto() {
     local str="Configuring mqtt server..."
-    printf "  %b %s..." "${INFO}" "${str}"
+    printf "  %b %s...\\n" "${INFO}" "${str}"
     touch /etc/mosquitto/passwd
     mqtt_username=$(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 10)
     mqtt_password=$(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 10)
