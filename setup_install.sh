@@ -136,7 +136,7 @@ uninstall() {
         /usr/sbin/ipset destroy WALLED_GARDEN_IPV4 > /dev/null 2>&1 || echo 0
     fi
     if [[ -e "/etc/pikonek/configs/iptables.default.rules" ]]; then
-        /usr/sbin/iptables-restore < iptables.default.rules
+        /usr/sbin/iptables-restore < /etc/pikonek/configs/iptables.default.rules > /dev/null 2>&1 || echo 0
     fi
     # Remove existing files
     rm -rf "${PIKONEK_INSTALL_DIR}/configs"
