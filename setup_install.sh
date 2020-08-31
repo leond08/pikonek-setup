@@ -2023,9 +2023,9 @@ finalExports() {
     echo -e "  lease_time: infinite"
     echo -e "  subnet: ${lan_subnet}"
     if [ "$WLAN_AP" -eq 1 ]; then
-    echo -e "- end: ${wpikonek_RANGE_1}"
+    echo -e "- end: ${wpikonek_RANGE_2}"
     echo -e "  interface: ${PIKONEK_WLAN_INTERFACE}"
-    echo -e "  start: ${wpikonek_RANGE_2}"
+    echo -e "  start: ${wpikonek_RANGE_1}"
     echo -e "  lease_time: infinite"
     echo -e "  subnet: ${wlan_subnet}"
     fi
