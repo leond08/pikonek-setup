@@ -1399,7 +1399,7 @@ configureMosquitto() {
     touch /etc/mosquitto/passwd
     mqtt_username=$(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 10)
     mqtt_password=$(tr -dc _A-Z-a-z-0-9 < /dev/urandom | head -c 10)
-    mosquitto_passwd -b /etc/mosquitto/passwd ${mqtt_username} ${mqtt_password}
+    mosquitto_passwd -b /etc/mosquitto/passwd ${mqtt_username} ${mqtt_password} > /dev/null 2>&1
     install -m 0644 ${PIKONEK_LOCAL_REPO}/configs/mosquitto.conf /etc/mosquitto/mosquitto.conf
     printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
 }   
