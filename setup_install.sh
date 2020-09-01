@@ -908,6 +908,7 @@ setupLanInterface() {
     for desiredInterface in ${chooseInterfaceOptions}; do
         # Set the one the user selected as the interface to use
         PIKONEK_LAN_INTERFACE=${desiredInterface}
+        PIKONEK_LAN_MAC_INTERFACE=$(cat /sys/class/net/$PIKONEK_LAN_INTERFACE/address)
         # and show this information to the user
         printf "  %b Using LAN interface: %s\\n" "${INFO}" "${PIKONEK_LAN_INTERFACE}"
     done
@@ -1978,12 +1979,14 @@ finalExports() {
     local wlan_ip_v4=$(ipcalc -cn $WLAN_IPV4_ADDRESS | awk 'FNR == 1 {print $2}')
     fi
     # Set the pikonek_net_mapping.yaml
+    PIKONEK_LAN_INTERFACE="lan1"
     {
     echo -e "network_config:"
     echo -e "- addresses:"
     echo -e "  - ip_netmask: ${LAN_IPV4_ADDRESS}"
     echo -e "  hotplug: false"
     echo -e "  is_wan: false"
+    echo -e "  hwaddr: ${PIKONEK_LAN_MAC_INTERFACE}"
     echo -e "  name: ${PIKONEK_LAN_INTERFACE}"
     echo -e "  type: interface"
     echo -e "  use_dhcp: false"
