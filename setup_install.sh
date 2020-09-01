@@ -34,6 +34,7 @@ pikonekGitConfig="https://github.com/leond08/configs.git"
 pikonekGitScripts="https://github.com/leond08/scripts.git"
 pikonekGitPackages="https://github.com/leond08/packages.git"
 pikonekGitBlockedList="https://github.com/leond08/blocked.git"
+pikonekGitWebAdmin="https://github.com/leond08/pisokonek-ui.git"
 PIKONEK_LOCAL_REPO="/etc/.pikonek"
 # This directory is where the PiKonek scripts will be installed
 PIKONEK_INSTALL_DIR="/etc/pikonek"
@@ -139,9 +140,9 @@ uninstall() {
         /usr/sbin/iptables-restore < /etc/pikonek/configs/iptables.default.rules > /dev/null 2>&1 || echo 0
     fi
     # Stop services
-    sudo /etc/init.d/S70piknkmain stop || echo 0
-    sudo /etc/init.d/S70pikonekcaptive stop || echo 0
-    sudo /etc/init.d/S70pikonekcaptivefw stop || echo 0
+    sudo /etc/init.d/S70piknkmain stop > /dev/null 2>&1 || echo 0
+    sudo /etc/init.d/S70pikonekcaptive stop > /dev/null 2>&1 || echo 0
+    sudo /etc/init.d/S70pikonekcaptivefw stop > /dev/null 2>&1 || echo 0
     # Remove existing files
     rm -rf "${PIKONEK_INSTALL_DIR}/configs"
     rm -rf "${PIKONEK_INSTALL_DIR}/scripts"
@@ -1416,6 +1417,8 @@ installpikonek() {
         install -d -m 0755 ${webroot}
     fi
 
+    cp -r ${PIKONEK_LOCAL_REPO}/ui/** /var/www/html
+
     chown ${LIGHTTPD_USER}:${LIGHTTPD_GROUP} ${webroot}
     chmod 0775 ${webroot}
     # Repair permissions if /var/www/html is not world readable
@@ -2230,6 +2233,11 @@ clone_or_update_repos() {
     # so get git files for Core
     getGitFiles "${PIKONEK_LOCAL_REPO}/pikonek" ${pikonekGitUrl} || \
     { printf "  %bUnable to clone %s into %s, unable to continue%b\\n" "${COL_LIGHT_RED}" "${pikonekGitUrl}" "${PIKONEK_LOCAL_REPO}" "${COL_NC}"; \
+    exit 1; \
+    }
+    # get git files for web ui
+    getGitFiles "${PIKONEK_LOCAL_REPO}/ui" ${pikonekGitWebAdmin} || \
+    { printf "  %bUnable to clone %s into %s, unable to continue%b\\n" "${COL_LIGHT_RED}" "${pikonekGitWebAdmin}" "${PIKONEK_LOCAL_REPO}" "${COL_NC}"; \
     exit 1; \
     }
     # get git files for config
