@@ -622,6 +622,7 @@ setupWlanInterface() {
                 for desiredInterface in ${chooseInterfaceOptions}; do
                     # Set the one the user selected as the interface to use
                     PIKONEK_WLAN_INTERFACE=${desiredInterface}
+                    PIKONEK_WLAN_MAC_INTERFACE=$(cat /sys/class/net/$PIKONEK_WLAN_INTERFACE/address)
                     # and show this information to the user
                     printf "  %b Using WLAN interface: %s\\n" "${INFO}" "${PIKONEK_WLAN_INTERFACE}"
                 done
@@ -1980,6 +1981,7 @@ finalExports() {
     fi
     # Set the pikonek_net_mapping.yaml
     PIKONEK_LAN_INTERFACE="lan1"
+    PIKONEK_WLAN_INTERFACE="wifi1"
     {
     echo -e "network_config:"
     echo -e "- addresses:"
@@ -1995,6 +1997,7 @@ finalExports() {
         echo -e "  - ip_netmask: ${WLAN_IPV4_ADDRESS}"
         echo -e "  hotplug: false"
         echo -e "  is_wan: false"
+        echo -e "  hwaddr: ${PIKONEK_WLAN_MAC_INTERFACE}"
         echo -e "  access_point: true"
         echo -e "  is_wlan: true"
         echo -e "  name: ${PIKONEK_WLAN_INTERFACE}"
