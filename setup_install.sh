@@ -98,12 +98,6 @@ skipSpaceCheck=false
 reconfigure=false
 runUnattended=false
 INSTALL_WEB_SERVER=true
-# Check arguments for the undocumented flags
-for var in "$@"; do
-    case "$var" in
-        "--reconfigure" ) reconfigure=true;;
-    esac
-done
 
 # Set these values so the installer can still run in color
 COL_NC='\e[0m' # No Color
@@ -129,15 +123,15 @@ show_ascii_berry() {
 
 uninstall() {
     if [[ -f "/etc/pikonek/configs/iptables.default.rules" ]]; then
-        /usr/sbin/iptables-restore < /etc/pikonek/configs/iptables.default.rules 2&>1
+        /usr/sbin/iptables-restore < /etc/pikonek/configs/iptables.default.rules  > /dev/null 2>&1 || echo ""
     fi
     if [[ -f "/etc/pikonek/ipset.rules" ]]; then
-        /usr/sbin/ipset destroy WALLED_GARDEN_IPV4 2&>1
+        /usr/sbin/ipset destroy WALLED_GARDEN_IPV4  > /dev/null 2>&1 || echo ""
     fi
     # Stop services
-    sudo /etc/init.d/S70piknkmain stop 2&>1
-    sudo /etc/init.d/S70pikonekcaptive stop 2&>1
-    sudo /etc/init.d/S70pikonekcaptivefw stop 2&>1
+    sudo /etc/init.d/S70piknkmain stop  > /dev/null 2>&1 ||  echo ""
+    sudo /etc/init.d/S70pikonekcaptive stop  > /dev/null 2>&1 ||  echo ""
+    sudo /etc/init.d/S70pikonekcaptivefw stop  > /dev/null 2>&1 ||  echo ""
     # Remove existing files
     rm -rf "${PIKONEK_INSTALL_DIR}/configs"
     rm -rf "${PIKONEK_INSTALL_DIR}/scripts"
@@ -1520,6 +1514,7 @@ installScripts() {
         install -o "${USER}" -Dm755 -t "${PIKONEK_INSTALL_DIR}/scripts" ./scripts/updatesoftware
         install -o "${USER}" -Dm755 -t "${PIKONEK_INSTALL_DIR}/scripts" ./scripts/pikonekcli.py
         install -o "${USER}" -Dm755 -t "${PIKONEK_INSTALL_DIR}/scripts" ./scripts/ntopng
+        install -o "${USER}" -Dm755 -t "${PIKONEK_INSTALL_DIR}/scripts" ./scripts/tcsave.sh
         install -o "${USER}" -Dm755 -t "${PIKONEK_INSTALL_DIR}/scripts" ./scripts/darkstat
         install -o "${USER}" -Dm755 -t "${PIKONEK_INSTALL_DIR}/scripts" ./scripts/bandwidthd
         # Create symbolic link for pikonek cli
@@ -1712,7 +1707,7 @@ notify_package_updates_available() {
 # Install python requirements using requirements.txt
 pip_install_packages() {
     printf "  %b Installing required package for pikonek core...\\n" "${INFO}"
-    printf "  %b Please wait and take some coffe...\\n" "${INFO}"
+    printf "  %b Please wait and have some coffee...\\n" "${INFO}"
     pip3 install -r "${PIKONEK_LOCAL_REPO}/pikonek/requirements.txt" || \
     { printf "  %bUnable to install required pikonek core dependencies, unable to continue%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"; \
     exit 1; \
@@ -1801,7 +1796,7 @@ install_dependent_packages() {
 createIPSET() {
     local str="Creating ipset..."
     printf "  %b %s..." "${INFO}" "${str}"
-    /usr/sbin/ipset create WALLED_GARDEN_IPV4 hash:ip family inet
+    /usr/sbin/ipset create WALLED_GARDEN_IPV4 hash:ip family inet  > /dev/null 2>&1 || echo ""
     /usr/sbin/ipset save > /etc/pikonek/ipset.rules
     printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
 }
@@ -2164,7 +2159,7 @@ displayFinalMessage() {
 Your Admin Webpage login password is ${pwstring}"
 
     # Final completion message to user
-    whiptail --msgbox --backtitle "Make it so." --title "Installation Complete!" "Successfully installed PiKonek on your system.
+    whiptail --msgbox --backtitle "Done." --title "Installation Complete!" "Successfully installed PiKonek on your system.
 Please reboot your sytem.
 The install log is in /etc/pikonek.
 ${additional}" "${r}" "${c}"
