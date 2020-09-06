@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC1090
+#
+# this script heavily adapted from pihole project
 set -e
-
-######## VARIABLES #########
-# For better maintainability, we store as much information that can change in variables
-# This allows us to make a change in one place that can propagate to all instances of the variable
-# These variables should all be GLOBAL variables, written in CAPS
-# Local variables will be in lowercase and will exist only within functions
-# It's still a work in progress, so you may see some variance in this guideline until it is complete
 
 # List of supported DNS servers
 DNS_SERVERS=$(cat << EOM
@@ -659,6 +654,18 @@ configurePikonekCore() {
         printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
     else
         printf "\\t\\t%bError: Unable to configure pikonek core, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"
+        return 1
+    fi
+}
+
+configureCaptivePortalRule() {
+    local str="Configuring captive portal rule"
+    printf "  %b %s...\\n" "${INFO}" "${str}"
+    if pikonek -r /etc/pikonek/configs/packages/captive_portal.yaml &> /dev/null; then
+        printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
+        /usr/sbin/iptables-save > /etc/iptables/rules.v4
+    else
+        printf "\\t\\t%bError: Unable to configure captive portal, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"
         return 1
     fi
 }
@@ -2471,7 +2478,9 @@ main() {
     fi
 
     printf "  %b Restarting services...\\n" "${INFO}"
-    # Start services
+
+    # Configure captive portal
+    configureCaptivePortalRule
 
     # Copy the temp log file into final log location for storage
     copy_to_install_log
