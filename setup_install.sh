@@ -128,11 +128,11 @@ show_ascii_berry() {
 }
 
 uninstall() {
-    if [[ -e "/etc/pikonek/ipset.rules" ]]; then
-        /usr/sbin/ipset destroy WALLED_GARDEN_IPV4 > /dev/null 2>&1 || echo 0
-    fi
-    if [[ -e "/etc/pikonek/configs/iptables.default.rules" ]]; then
+    if [[ -f "/etc/pikonek/configs/iptables.default.rules" ]]; then
         /usr/sbin/iptables-restore < /etc/pikonek/configs/iptables.default.rules > /dev/null 2>&1 || echo 0
+    fi
+    if [[ -f "/etc/pikonek/ipset.rules" ]]; then
+        /usr/sbin/ipset destroy WALLED_GARDEN_IPV4 > /dev/null 2>&1 || echo 0
     fi
     # Stop services
     sudo /etc/init.d/S70piknkmain stop > /dev/null 2>&1 || echo 0
