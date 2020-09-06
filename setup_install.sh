@@ -129,15 +129,15 @@ show_ascii_berry() {
 
 uninstall() {
     if [[ -f "/etc/pikonek/configs/iptables.default.rules" ]]; then
-        /usr/sbin/iptables-restore < /etc/pikonek/configs/iptables.default.rules > /dev/null 2>&1 || echo 0
+        /usr/sbin/iptables-restore < /etc/pikonek/configs/iptables.default.rules 2&>1
     fi
     if [[ -f "/etc/pikonek/ipset.rules" ]]; then
-        /usr/sbin/ipset destroy WALLED_GARDEN_IPV4 > /dev/null 2>&1 || echo 0
+        /usr/sbin/ipset destroy WALLED_GARDEN_IPV4 2&>1
     fi
     # Stop services
-    sudo /etc/init.d/S70piknkmain stop > /dev/null 2>&1 || echo 0
-    sudo /etc/init.d/S70pikonekcaptive stop > /dev/null 2>&1 || echo 0
-    sudo /etc/init.d/S70pikonekcaptivefw stop > /dev/null 2>&1 || echo 0
+    sudo /etc/init.d/S70piknkmain stop 2&>1
+    sudo /etc/init.d/S70pikonekcaptive stop 2&>1
+    sudo /etc/init.d/S70pikonekcaptivefw stop 2&>1
     # Remove existing files
     rm -rf "${PIKONEK_INSTALL_DIR}/configs"
     rm -rf "${PIKONEK_INSTALL_DIR}/scripts"
@@ -1580,6 +1580,8 @@ configureNetwork() {
     local str="Configuring network interface"
     printf "  %b %s...\\n" "${INFO}" "${str}"
     if pikonek -n /etc/pikonek/configs/pikonek_net_mapping.yaml &> /dev/null; then
+        /usr/sbin/ifdown $PIKONEK_LAN_INTERFACE 2&>1
+        /usr/sbin/ifup $PIKONEK_LAN_INTERFACE 2&>1
         printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
     else
         printf "\\t\\t%bError: Unable to configure network interface, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"
