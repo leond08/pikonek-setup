@@ -1988,7 +1988,7 @@ finalExports() {
     fi
     # Set the pikonek_net_mapping.yaml
     PIKONEK_LAN_INTERFACE="lan1"
-    PIKONEK_WLAN_INTERFACE="wifi1"
+    PIKONEK_WLAN_INTERFACE="wln1"
     {
     echo -e "network_config:"
     echo -e "- addresses:"
