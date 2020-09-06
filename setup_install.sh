@@ -1580,8 +1580,8 @@ configureNetwork() {
     local str="Configuring network interface"
     printf "  %b %s...\\n" "${INFO}" "${str}"
     if pikonek -n /etc/pikonek/configs/pikonek_net_mapping.yaml &> /dev/null; then
-        /usr/sbin/ifdown $PIKONEK_LAN_INTERFACE 2&>1
-        /usr/sbin/ifup $PIKONEK_LAN_INTERFACE 2&>1
+        # /usr/sbin/ifdown $PIKONEK_LAN_INTERFACE 2&>1
+        # /usr/sbin/ifup $PIKONEK_LAN_INTERFACE 2&>1
         printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
     else
         printf "\\t\\t%bError: Unable to configure network interface, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"
