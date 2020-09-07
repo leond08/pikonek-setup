@@ -824,6 +824,7 @@ setupWanInterface() {
     for desiredInterface in ${chooseInterfaceOptions}; do
         # Set the one the user selected as the interface to use
         PIKONEK_WAN_INTERFACE=${desiredInterface}
+        PIKONEK_WAN_MAC_INTERFACE=$(cat /sys/class/net/$PIKONEK_WAN_INTERFACE/address)
         # and show this information to the user
         printf "  %b Using WAN interface: %s\\n" "${INFO}" "${PIKONEK_WAN_INTERFACE}"
     done
@@ -1986,6 +1987,7 @@ finalExports() {
     # Set the pikonek_net_mapping.yaml
     PIKONEK_LAN_INTERFACE="lan1"
     PIKONEK_WLAN_INTERFACE="wln1"
+    PIKONEK_WAN_INTERFACE="wan0"
     {
     echo -e "network_config:"
     echo -e "- addresses:"
@@ -2014,12 +2016,14 @@ finalExports() {
     echo -e "  hotplug: false"
     echo -e "  is_wan: true"
     echo -e "  name: ${PIKONEK_WAN_INTERFACE}"
+    echo -e "  hwaddr: ${PIKONEK_WAN_MAC_INTERFACE}"
     echo -e "  type: interface"
     echo -e "  use_dhcp: ${PIKONEK_WAN_DHCP_INTERFACE}"
     else
     echo -e "- hotplug: false"
     echo -e "  is_wan: true"
     echo -e "  name: ${PIKONEK_WAN_INTERFACE}"
+    echo -e "  hwaddr: ${PIKONEK_WAN_MAC_INTERFACE}"
     echo -e "  type: interface"
     echo -e "  use_dhcp: ${PIKONEK_WAN_DHCP_INTERFACE}"
     fi
