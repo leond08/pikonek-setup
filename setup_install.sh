@@ -296,7 +296,7 @@ if is_command apt-get ; then
     fi
     # Since our install script is so large, we need several other programs to successfully get a machine provisioned
     # These programs are stored in an array so they can be looped through later
-    INSTALLER_DEPS=(build-essential gcc-multilib python3-dev python3-testresources libssl-dev libffi-dev ipcalc lighttpd python3 sqlite3 dnsmasq python3-pip python3-apt python3-setuptools gawk curl cron wget iptables iptables-persistent ipset whiptail git openssl ifupdown ntp wpasupplicant mosquitto)
+    INSTALLER_DEPS=(build-essential gcc-multilib python3-dev python3-testresources libssl-dev libffi-dev ipcalc lighttpd python3 sqlite3 dnsmasq dnsmasq-utils python3-pip python3-apt python3-setuptools gawk curl cron wget iptables iptables-persistent ipset whiptail git openssl ifupdown ntp wpasupplicant mosquitto)
     # A function to check...
     test_dpkg_lock() {
         # An iterator used for counting loop iterations
