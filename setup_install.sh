@@ -1482,6 +1482,7 @@ installpikonek() {
     chown -R pikonek:pikonek /etc/pikonek
     # Install the cron file
     installCron
+    installIptablesPersistent
 }
 
 # install default blocked list
@@ -1876,6 +1877,15 @@ installCron() {
     # File must not be world or group writeable and must be owned by root
     install -D -m 644 -T -o root -g root ${PIKONEK_LOCAL_REPO}/scripts/pikonek.cron /etc/cron.d/pikonek
     install -D -m 755 -T -o root -g root ${PIKONEK_LOCAL_REPO}/scripts/pikonekupdateblockedlist /etc/cron.daily/pikonekupdateblockedlist
+    printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
+}
+
+installIptablesPersistent() {
+    # Installs a iptables-restore script
+    local str="Installing iptables persistent script"
+    printf "\\n  %b %s..." "${INFO}" "${str}"
+    # File must not be world or group writeable and must be owned by root
+    install -D -m 644 -T -o root -g root ${PIKONEK_LOCAL_REPO}/scripts/15-ip4tables /usr/share/netfilter-persistent/plugins.d/15-ip4tables
     printf "%b  %b %s\\n" "${OVER}" "${TICK}" "${str}"
 }
 
