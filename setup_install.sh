@@ -296,7 +296,7 @@ if is_command apt-get ; then
     fi
     # Since our install script is so large, we need several other programs to successfully get a machine provisioned
     # These programs are stored in an array so they can be looped through later
-    INSTALLER_DEPS=(build-essential gcc-multilib python3-dev python3-testresources libssl-dev libffi-dev ipcalc lighttpd python3 sqlite3 dnsmasq dnsmasq-utils python3-pip python3-apt python3-setuptools gawk curl cron wget iptables ipset whiptail git openssl ifupdown ntp wpasupplicant mosquitto)
+    INSTALLER_DEPS=(build-essential gcc-multilib python3-dev python3-testresources libssl-dev libffi-dev ipcalc lighttpd python3 sqlite3 dnsmasq dnsmasq-utils python3-pip python3-apt python3-setuptools gawk curl cron wget iptables ipset whiptail git openssl ifupdown ntp wpasupplicant mosquitto iptables-persistent)
     # A function to check...
     test_dpkg_lock() {
         # An iterator used for counting loop iterations
@@ -657,12 +657,12 @@ configureCaptivePortalRule() {
     printf "  %b %s...\\n" "${INFO}" "${str}"
     if pikonek -r /etc/pikonek/configs/packages/captive_portal.yaml &> /dev/null; then
         printf "%b  %b %s...\\n" "${OVER}" "${TICK}" "${str}"
-        #Save IPv4 rules
-        if [ ! -f /etc/iptables/rules.v4 ]; then
-            touch /etc/iptables/rules.v4
-            chmod 0640 /etc/iptables/rules.v4
+        # Save IPv4 rules
+        if [ ! -f /etc/pikonek/rules.v4 ]; then
+            touch /etc/pikonek/rules.v4
+            chmod 0640 /etc/pikonek/rules.v4
         fi
-        /usr/sbin/iptables-save > /etc/iptables/rules.v4
+        /usr/sbin/iptables-save > /etc/pikonek/rules.v4
     else
         printf "\\t\\t%bError: Unable to configure captive portal, exiting installer%b\\n" "${COL_LIGHT_RED}" "${COL_NC}"
         return 1
@@ -1487,7 +1487,7 @@ installpikonek() {
     chown -R pikonek:pikonek /etc/pikonek
     # Install the cron file
     installCron
-    # installIptablesPersistent
+    installIptablesPersistent
 }
 
 # install default blocked list
@@ -2447,7 +2447,7 @@ main() {
     enable_service S70piknkmain
     enable_service S70pikonekcaptive
     enable_service S70pikonekcaptivefw
-    # enable_service iptables # enable netfilter-persistent
+    enable_service netfilter-persistent # enable netfilter-persistent
 
     if check_service_active "S70piknkmain"; then
         PIKONEK_MAIN_ENABLED=true
