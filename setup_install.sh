@@ -131,7 +131,7 @@ uninstall() {
     # Stop services
     sudo /etc/init.d/S70piknkmain stop  > /dev/null 2>&1 ||  echo ""
     sudo /etc/init.d/S70pikonekcaptive stop  > /dev/null 2>&1 ||  echo ""
-    sudo /etc/init.d/S70pikonekcaptivefw stop  > /dev/null 2>&1 ||  echo ""
+    # sudo /etc/init.d/S70pikonekcaptivefw stop  > /dev/null 2>&1 ||  echo ""
     # Remove existing files
     rm -rf "${PIKONEK_INSTALL_DIR}/configs"
     rm -rf "${PIKONEK_INSTALL_DIR}/scripts"
@@ -148,7 +148,7 @@ uninstall() {
     rm -rf /etc/dnsmasq.d/01-pikonek.conf.old
     rm -rf /etc/init.d/S70piknkmain
     rm -rf /etc/init.d/S70pikonekcaptive
-    rm -rf /etc/init.d/S70pikonekcaptivefw
+    # rm -rf /etc/init.d/S70pikonekcaptivefw
     rm -rf /etc/sysctl.conf
     rm -rf /etc/sudoers.d/pikonek
     rm -rf /usr/local/bin/pikonek
@@ -1476,7 +1476,7 @@ installpikonek() {
 
     # install captive portal init script
     install -m 0755 ${PIKONEK_INSTALL_DIR}/packages/captive/init.d/S70pikonekcaptive /etc/init.d/S70pikonekcaptive
-    install -m 0755 ${PIKONEK_INSTALL_DIR}/packages/captive/init.d/S70pikonekcaptivefw /etc/init.d/S70pikonekcaptivefw
+    # install -m 0755 ${PIKONEK_INSTALL_DIR}/packages/captive/init.d/S70pikonekcaptivefw /etc/init.d/S70pikonekcaptivefw
     # install default blocked list
     # installDefaultBlockedList
     # install web server
@@ -2446,7 +2446,7 @@ main() {
     # Enable service
     enable_service S70piknkmain
     enable_service S70pikonekcaptive
-    enable_service S70pikonekcaptivefw
+    # enable_service S70pikonekcaptivefw
     enable_service netfilter-persistent # enable netfilter-persistent
 
     if check_service_active "S70piknkmain"; then
@@ -2459,11 +2459,12 @@ main() {
     else
         PIKONEK_CAPTIVE_ENABLED=false
     fi
-    if check_service_active "S70pikonekcaptivefw"; then
-        PIKONEK_CAPTIVEFW_ENABLED=true
-    else
-        PIKONEK_CAPTIVEFW_ENABLED=false
-    fi
+
+    # if check_service_active "S70pikonekcaptivefw"; then
+    #     PIKONEK_CAPTIVEFW_ENABLED=true
+    # else
+    #     PIKONEK_CAPTIVEFW_ENABLED=false
+    # fi
 
     if [[ "${PIKONEK_MAIN_ENABLED}" == false ]]; then
         restart_service S70piknkmain
@@ -2479,12 +2480,12 @@ main() {
         printf "  %b S70pikonekcaptive is disabled, skipping service restart\\n" "${INFO}"
     fi
 
-    if [[ "${PIKONEK_CAPTIVEFW_ENABLED}" == false ]]; then
-        restart_service S70pikonekcaptivefw
-        enable_service S70pikonekcaptivefw
-    else
-        printf "  %b S70pikonekcaptive is disabled, skipping service restart\\n" "${INFO}"
-    fi
+    # if [[ "${PIKONEK_CAPTIVEFW_ENABLED}" == false ]]; then
+    #     restart_service S70pikonekcaptivefw
+    #     enable_service S70pikonekcaptivefw
+    # else
+    #     printf "  %b S70pikonekcaptive is disabled, skipping service restart\\n" "${INFO}"
+    # fi
 
     if [[ "${LIGHTTPD_ENABLED}" == true ]]; then
         restart_service lighttpd
